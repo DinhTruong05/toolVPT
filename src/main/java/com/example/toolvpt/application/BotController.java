@@ -19,4 +19,9 @@ public class BotController {
     public boolean isRunning() {
         return engine.isRunning();
     }
+
+    // ✅ fix đúng
+    public void setTarget(String target) {
+        engine.setTarget(target);
+    }
 }

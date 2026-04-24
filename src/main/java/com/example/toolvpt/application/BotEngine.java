@@ -25,6 +25,12 @@ public class BotEngine {
 
     private volatile boolean running = false;
 
+    // 🎯 target từ UI
+    private String currentTarget = "All";
+
+    // 🛑 anti spam click
+    private long lastClickTime = 0;
+
     public BotEngine(ToolService service) throws Exception {
         this.service = service;
         this.decision = new DecisionEngine();
@@ -35,7 +41,7 @@ public class BotEngine {
         // ✅ load template trước
         this.templates = loadTemplates();
 
-        // ✅ inject đúng
+        // ✅ inject finder
         this.targetFinder = new TargetFinder(matcher, templates);
     }
 
@@ -132,20 +138,38 @@ public class BotEngine {
         try {
             BufferedImage screen = screenService.capture();
 
-            Point target = targetFinder.findNearest(screen);
+            Point target;
 
-            if (target != null) {
+            // 🎯 chọn theo UI
+            switch (currentTarget) {
+                case "Orc" -> target = targetFinder.findOnly(screen, 0);
+                case "Boss" -> target = targetFinder.findOnly(screen, 1);
+                default -> target = targetFinder.findNearest(screen);
+            }
+
+            // 🛑 anti spam
+            if (target != null && System.currentTimeMillis() - lastClickTime > 1200) {
+
                 input.click(target.x, target.y);
+                lastClickTime = System.currentTimeMillis();
 
                 System.out.println("🎯 Click target: " + target.x + ", " + target.y);
 
-                Thread.sleep(800); // tránh spam click
-            } else {
+            } else if (target == null) {
                 System.out.println("❌ No target found");
             }
 
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    // ================= TARGET SET =================
+
+    public void setTarget(String target) {
+        if (!target.equals(this.currentTarget)) {
+            this.currentTarget = target;
+            System.out.println("🎯 Set target: " + target);
         }
     }
 
