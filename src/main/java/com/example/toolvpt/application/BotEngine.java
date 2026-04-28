@@ -1,10 +1,13 @@
 package com.example.toolvpt.application;
-
+import com.example.toolvpt.application.TargetFinder;
+import com.example.toolvpt.application.ToolService;
+import com.example.toolvpt.config.ToolVptProperties;
 import com.example.toolvpt.domain.decision.BotAction;
 import com.example.toolvpt.domain.decision.DecisionEngine;
 import com.example.toolvpt.infrastructure.input.InputController;
 import com.example.toolvpt.infrastructure.screen.ScreenCaptureService;
 import com.example.toolvpt.infrastructure.screen.TemplateMatcher;
+import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
@@ -12,85 +15,42 @@ import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.util.List;
 
+@Component
 public class BotEngine {
 
     private final ToolService service;
+    private final ToolVptProperties config;
+
     private final DecisionEngine decision;
     private final InputController input;
     private final ScreenCaptureService screenService;
-    private final TemplateMatcher matcher;
     private final TargetFinder targetFinder;
 
-    private List<BufferedImage> templates;
+    private final List<BufferedImage> templates;
 
     private volatile boolean running = false;
+    private volatile String currentTarget = "Orc";
 
-    // 🎯 target từ UI
-    private String currentTarget = "All";
-
-    // 🛑 anti spam click
     private long lastClickTime = 0;
+    private volatile Rectangle dynamicRegion;
 
-    public BotEngine(ToolService service) throws Exception {
+    public BotEngine(ToolService service, ToolVptProperties config) throws Exception {
         this.service = service;
+        this.config = config;
+
         this.decision = new DecisionEngine();
         this.input = new InputController();
         this.screenService = new ScreenCaptureService();
-        this.matcher = new TemplateMatcher();
 
-        // ✅ load template trước
         this.templates = loadTemplates();
-
-        // ✅ inject finder
-        this.targetFinder = new TargetFinder(matcher, templates);
+        this.targetFinder = new TargetFinder(new TemplateMatcher(), templates, config);
     }
 
-    // ================= LOAD TEMPLATE =================
-
-    private List<BufferedImage> loadTemplates() {
-        try {
-            return List.of(
-                    loadImage("samples/orc.png"),
-                    loadImage("samples/boss.png")
-            );
-        } catch (Exception e) {
-            throw new RuntimeException("Load template failed", e);
-        }
-    }
-
-    private BufferedImage loadImage(String path) throws Exception {
-        InputStream is = getClass().getClassLoader().getResourceAsStream(path);
-
-        if (is == null) {
-            throw new RuntimeException("Không tìm thấy file: " + path);
-        }
-
-        return ImageIO.read(is);
-    }
-
-    // ================= BOT CONTROL =================
-
-    public void start() {
-        if (running) return;
-
-        running = true;
-        new Thread(this::loop, "bot-thread").start();
-
-        System.out.println("✅ Bot started");
-    }
-
-    public void stop() {
-        running = false;
-        System.out.println("🛑 Bot stopped");
-    }
-
-    public boolean isRunning() {
-        return running;
-    }
-
-    // ================= MAIN LOOP =================
+    // ================= LOOP =================
 
     private void loop() {
+        System.out.println("✅ Bot loop started");
+
         while (running) {
             try {
                 var result = service.detect();
@@ -100,61 +60,63 @@ public class BotEngine {
 
                 execute(action);
 
-                sleepRandom();
+                Thread.sleep(config.getCaptureIntervalMs());
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+
+        System.out.println("🛑 Bot loop stopped");
     }
 
-    // ================= ACTION EXECUTION =================
+    // ================= ACTION =================
 
     private void execute(BotAction action) {
-
         switch (action) {
-
             case SEARCH_ENEMY -> searchAndClick();
-
-            case ATTACK -> {
-                input.pressSpace();
-                System.out.println("⚔️ Attack");
-            }
-
-            case CLICK_REWARD -> {
-                input.click(700, 400);
-                System.out.println("🎁 Click reward");
-            }
-
-            case IDLE, NONE -> {
-                // do nothing
-            }
+            case ATTACK -> input.pressSpace();
+            case CLICK_REWARD -> input.click(700, 400);
+            default -> {}
         }
     }
 
-    // ================= TARGET LOGIC =================
+    // ================= TARGET =================
 
     private void searchAndClick() {
         try {
-            BufferedImage screen = screenService.capture();
+            Rectangle region = dynamicRegion != null
+                    ? dynamicRegion
+                    : new Rectangle(
+                    config.getWindowX(),
+                    config.getWindowY(),
+                    config.getRegionWidth(),
+                    config.getRegionHeight()
+            );
+
+            // 🔥 capture đúng vùng
+            BufferedImage screen = screenService.capture(region);
 
             Point target;
 
-            // 🎯 chọn theo UI
             switch (currentTarget) {
                 case "Orc" -> target = targetFinder.findOnly(screen, 0);
                 case "Boss" -> target = targetFinder.findOnly(screen, 1);
                 default -> target = targetFinder.findNearest(screen);
             }
 
-            // 🛑 anti spam
-            if (target != null && System.currentTimeMillis() - lastClickTime > 1200) {
+            long now = System.currentTimeMillis();
 
-                input.click(target.x, target.y);
-                lastClickTime = System.currentTimeMillis();
+            if (target != null && now - lastClickTime > 1200) {
 
-                System.out.println("🎯 Click target: " + target.x + ", " + target.y);
+                // ✅ CHỈ cộng offset 1 lần ở đây
+                int clickX = target.x + region.x;
+                int clickY = target.y + region.y;
 
+                input.click(clickX, clickY);
+                lastClickTime = now;
+
+                System.out.println("🎯 Click: " + clickX + "," + clickY);
             } else if (target == null) {
                 System.out.println("❌ No target found");
             }
@@ -164,20 +126,50 @@ public class BotEngine {
         }
     }
 
-    // ================= TARGET SET =================
+    // ================= CONTROL =================
+
+    public synchronized void start() {
+        if (running) return;
+        running = true;
+
+        new Thread(this::loop, "bot-thread").start();
+        System.out.println("✅ Bot started");
+    }
+
+    public synchronized void stop() {
+        running = false;
+        System.out.println("🛑 Bot stopped");
+    }
+
+    public boolean isRunning() {
+        return running;
+    }
 
     public void setTarget(String target) {
-        if (!target.equals(this.currentTarget)) {
-            this.currentTarget = target;
-            System.out.println("🎯 Set target: " + target);
+        this.currentTarget = target;
+    }
+
+    public void updateRegion(Rectangle rect) {
+        this.dynamicRegion = new Rectangle(rect);
+        System.out.println("📐 Updated scan region: " + rect);
+    }
+
+    // ================= LOAD =================
+
+    private List<BufferedImage> loadTemplates() {
+        try {
+            return List.of(
+                    loadImage("samples/orc.png"),
+                    loadImage("samples/boss.png")
+            );
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
-    // ================= UTILS =================
-
-    private void sleepRandom() {
-        try {
-            Thread.sleep(400 + (int) (Math.random() * 200));
-        } catch (InterruptedException ignored) {}
+    private BufferedImage loadImage(String path) throws Exception {
+        InputStream is = getClass().getClassLoader().getResourceAsStream(path);
+        if (is == null) throw new RuntimeException("Missing: " + path);
+        return ImageIO.read(is);
     }
 }

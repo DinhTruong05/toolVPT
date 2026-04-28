@@ -14,8 +14,15 @@ public class ScreenCaptureService {
         this.robot = new Robot();
     }
 
+    // capture full màn hình
     public BufferedImage capture() {
-        Rectangle rect = new Rectangle(Toolkit.getDefaultToolkit().getScreenSize());
-        return robot.createScreenCapture(rect);
+        return robot.createScreenCapture(
+                new Rectangle(Toolkit.getDefaultToolkit().getScreenSize())
+        );
+    }
+
+    // ✅ capture theo vùng (cái bạn đang cần)
+    public BufferedImage capture(Rectangle area) {
+        return robot.createScreenCapture(area);
     }
 }

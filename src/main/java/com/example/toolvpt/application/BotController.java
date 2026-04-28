@@ -1,5 +1,10 @@
 package com.example.toolvpt.application;
 
+import org.springframework.stereotype.Component;
+
+import java.awt.*;
+
+@Component
 public class BotController {
 
     private final BotEngine engine;
@@ -23,5 +28,9 @@ public class BotController {
     // ✅ fix đúng
     public void setTarget(String target) {
         engine.setTarget(target);
+    }
+
+    public void updateRegion(Rectangle rect) {
+        engine.updateRegion(rect);
     }
 }
