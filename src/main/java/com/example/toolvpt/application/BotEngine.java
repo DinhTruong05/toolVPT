@@ -1,6 +1,5 @@
 package com.example.toolvpt.application;
-import com.example.toolvpt.application.TargetFinder;
-import com.example.toolvpt.application.ToolService;
+
 import com.example.toolvpt.config.ToolVptProperties;
 import com.example.toolvpt.domain.decision.BotAction;
 import com.example.toolvpt.domain.decision.DecisionEngine;
@@ -20,30 +19,38 @@ public class BotEngine {
 
     private final ToolService service;
     private final ToolVptProperties config;
-
-    private final DecisionEngine decision;
     private final InputController input;
     private final ScreenCaptureService screenService;
     private final TargetFinder targetFinder;
-
-    private final List<BufferedImage> templates;
+    private final DecisionEngine decision;
 
     private volatile boolean running = false;
     private volatile String currentTarget = "Orc";
 
+    private Thread botThread;
     private long lastClickTime = 0;
+
+    // vùng scan dynamic (overlay)
     private volatile Rectangle dynamicRegion;
 
-    public BotEngine(ToolService service, ToolVptProperties config) throws Exception {
+    public BotEngine(
+            ToolService service,
+            ToolVptProperties config,
+            InputController input,
+            ScreenCaptureService screenService,
+            TemplateMatcher matcher
+    ) {
         this.service = service;
         this.config = config;
-
+        this.input = input;
+        this.screenService = screenService;
         this.decision = new DecisionEngine();
-        this.input = new InputController();
-        this.screenService = new ScreenCaptureService();
 
-        this.templates = loadTemplates();
-        this.targetFinder = new TargetFinder(new TemplateMatcher(), templates, config);
+        // load template 1 lần
+        List<BufferedImage> templates = loadTemplates();
+
+        // inject đúng dependency
+        this.targetFinder = new TargetFinder(matcher, templates, config);
     }
 
     // ================= LOOP =================
@@ -54,6 +61,7 @@ public class BotEngine {
         while (running) {
             try {
                 var result = service.detect();
+
                 BotAction action = decision.decide(result.getState());
 
                 System.out.println("State: " + result.getState() + " | Action: " + action);
@@ -62,11 +70,15 @@ public class BotEngine {
 
                 Thread.sleep(config.getCaptureIntervalMs());
 
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
 
+        running = false;
         System.out.println("🛑 Bot loop stopped");
     }
 
@@ -75,9 +87,17 @@ public class BotEngine {
     private void execute(BotAction action) {
         switch (action) {
             case SEARCH_ENEMY -> searchAndClick();
-            case ATTACK -> input.pressSpace();
-            case CLICK_REWARD -> input.click(700, 400);
-            default -> {}
+            case ATTACK -> {
+                input.pressSpace();
+                System.out.println("⚔️ Attack");
+            }
+            case CLICK_REWARD -> {
+                input.click(700, 400);
+                System.out.println("🎁 Click reward");
+            }
+            default -> {
+                // NONE / IDLE
+            }
         }
     }
 
@@ -85,16 +105,9 @@ public class BotEngine {
 
     private void searchAndClick() {
         try {
-            Rectangle region = dynamicRegion != null
-                    ? dynamicRegion
-                    : new Rectangle(
-                    config.getWindowX(),
-                    config.getWindowY(),
-                    config.getRegionWidth(),
-                    config.getRegionHeight()
-            );
+            Rectangle region = getScanRegion();
 
-            // 🔥 capture đúng vùng
+            // capture đúng vùng
             BufferedImage screen = screenService.capture(region);
 
             Point target;
@@ -109,7 +122,6 @@ public class BotEngine {
 
             if (target != null && now - lastClickTime > 1200) {
 
-                // ✅ CHỈ cộng offset 1 lần ở đây
                 int clickX = target.x + region.x;
                 int clickY = target.y + region.y;
 
@@ -117,6 +129,7 @@ public class BotEngine {
                 lastClickTime = now;
 
                 System.out.println("🎯 Click: " + clickX + "," + clickY);
+
             } else if (target == null) {
                 System.out.println("❌ No target found");
             }
@@ -126,18 +139,40 @@ public class BotEngine {
         }
     }
 
+    private Rectangle getScanRegion() {
+        if (dynamicRegion != null) {
+            return dynamicRegion;
+        }
+
+        return new Rectangle(
+                config.getWindowX(),
+                config.getWindowY(),
+                config.getRegionWidth(),
+                config.getRegionHeight()
+        );
+    }
+
     // ================= CONTROL =================
 
     public synchronized void start() {
         if (running) return;
+
         running = true;
 
-        new Thread(this::loop, "bot-thread").start();
+        botThread = new Thread(this::loop, "toolvpt-bot-thread");
+        botThread.start();
+
         System.out.println("✅ Bot started");
     }
 
     public synchronized void stop() {
         running = false;
+
+        if (botThread != null) {
+            botThread.interrupt();
+            botThread = null;
+        }
+
         System.out.println("🛑 Bot stopped");
     }
 
@@ -146,15 +181,20 @@ public class BotEngine {
     }
 
     public void setTarget(String target) {
-        this.currentTarget = target;
+        if (target != null) {
+            this.currentTarget = target;
+            System.out.println("🎯 Set target: " + target);
+        }
     }
 
     public void updateRegion(Rectangle rect) {
-        this.dynamicRegion = new Rectangle(rect);
-        System.out.println("📐 Updated scan region: " + rect);
+        if (rect != null) {
+            this.dynamicRegion = new Rectangle(rect);
+            System.out.println("📐 Updated scan region: " + rect);
+        }
     }
 
-    // ================= LOAD =================
+    // ================= LOAD TEMPLATE =================
 
     private List<BufferedImage> loadTemplates() {
         try {
@@ -163,13 +203,17 @@ public class BotEngine {
                     loadImage("samples/boss.png")
             );
         } catch (Exception e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("❌ Load template failed", e);
         }
     }
 
     private BufferedImage loadImage(String path) throws Exception {
         InputStream is = getClass().getClassLoader().getResourceAsStream(path);
-        if (is == null) throw new RuntimeException("Missing: " + path);
+
+        if (is == null) {
+            throw new RuntimeException("❌ Missing file: " + path);
+        }
+
         return ImageIO.read(is);
     }
 }

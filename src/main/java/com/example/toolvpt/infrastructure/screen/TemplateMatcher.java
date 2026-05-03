@@ -1,11 +1,23 @@
 package com.example.toolvpt.infrastructure.screen;
 
-import java.awt.*;
-import java.awt.image.BufferedImage;
+import org.springframework.stereotype.Component;
 
+import java.awt.Point;
+import java.awt.image.BufferedImage;
+import java.util.*;
+
+@Component
 public class TemplateMatcher {
 
+    private static final double ACCEPT_SCORE = 30.0;
+    private static final int STEP = 2;
+    private static final int MAX_RESULTS = 10;
+
     public Point find(BufferedImage screen, BufferedImage template) {
+        return findBestMatch(screen, template);
+    }
+
+    public Point findBestMatch(BufferedImage screen, BufferedImage template) {
 
         int sw = screen.getWidth();
         int sh = screen.getHeight();
@@ -13,35 +25,53 @@ public class TemplateMatcher {
         int tw = template.getWidth();
         int th = template.getHeight();
 
-        for (int y = 0; y < sh - th; y += 5) {
-            for (int x = 0; x < sw - tw; x += 5) {
+        double bestScore = Double.MAX_VALUE;
+        Point bestPoint = null;
 
-                if (match(screen, template, x, y)) {
-                    return new Point(x + tw / 2, y + th / 2);
+        for (int y = 0; y <= sh - th; y += STEP) {
+            for (int x = 0; x <= sw - tw; x += STEP) {
+
+                double score = matchScore(screen, template, x, y, bestScore);
+
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestPoint = new Point(x + tw / 2, y + th / 2);
                 }
             }
         }
 
+        if (bestScore <= ACCEPT_SCORE) {
+            System.out.println("✅ Match OK: score=" + bestScore);
+            return bestPoint;
+        }
+
+        System.out.println("❌ No match. Best=" + bestScore);
         return null;
     }
 
-    private boolean match(BufferedImage screen, BufferedImage template, int startX, int startY) {
+    private double matchScore(BufferedImage screen, BufferedImage template,
+                              int startX, int startY, double currentBest) {
 
-        int threshold = 30; // độ sai lệch cho phép
+        long totalDiff = 0;
+        int count = 0;
 
-        for (int y = 0; y < template.getHeight(); y += 3) {
-            for (int x = 0; x < template.getWidth(); x += 3) {
+        for (int y = 0; y < template.getHeight(); y += 2) {
+            for (int x = 0; x < template.getWidth(); x += 2) {
 
                 int rgb1 = screen.getRGB(startX + x, startY + y);
                 int rgb2 = template.getRGB(x, y);
 
-                if (colorDiff(rgb1, rgb2) > threshold) {
-                    return false;
+                totalDiff += colorDiff(rgb1, rgb2);
+                count++;
+
+                // 🔥 early stop nếu đã tệ hơn best hiện tại
+                if (totalDiff / (double) count > currentBest) {
+                    return Double.MAX_VALUE;
                 }
             }
         }
 
-        return true;
+        return (double) totalDiff / count;
     }
 
     private int colorDiff(int c1, int c2) {
@@ -53,6 +83,8 @@ public class TemplateMatcher {
         int g2 = (c2 >> 8) & 0xff;
         int b2 = c2 & 0xff;
 
-        return Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
+        return Math.abs(r1 - r2)
+                + Math.abs(g1 - g2)
+                + Math.abs(b1 - b2);
     }
 }

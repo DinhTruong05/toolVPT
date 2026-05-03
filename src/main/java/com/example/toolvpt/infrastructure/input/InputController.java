@@ -1,8 +1,11 @@
 package com.example.toolvpt.infrastructure.input;
 
+import org.springframework.stereotype.Component;
+
 import java.awt.*;
 import java.awt.event.InputEvent;
 
+@Component
 public class InputController {
 
     private final Robot robot;

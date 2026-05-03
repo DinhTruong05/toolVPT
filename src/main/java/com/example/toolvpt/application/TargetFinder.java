@@ -2,13 +2,15 @@ package com.example.toolvpt.application;
 
 import com.example.toolvpt.config.ToolVptProperties;
 import com.example.toolvpt.infrastructure.screen.TemplateMatcher;
+import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
+import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
 
+@Component
 public class TargetFinder {
 
     private final TemplateMatcher matcher;
@@ -32,7 +34,6 @@ public class TargetFinder {
         return findFromTemplates(screen, List.of(templates.get(index)));
     }
 
-    // 🔥 CORE FIXED
     private Point findFromTemplates(BufferedImage screen, List<BufferedImage> list) {
 
         int width = screen.getWidth();
@@ -46,11 +47,11 @@ public class TargetFinder {
 
         for (BufferedImage template : list) {
 
-            Point p = matcher.find(screen, template); // ❗ dùng full screen
+            List<Point> points = matcher.findPoints(screen, template);
 
-            if (p != null) {
+            for (Point point : points) {
 
-                double dist = Math.hypot(p.x - centerX, p.y - centerY);
+                double dist = Math.hypot(point.x - centerX, point.y - centerY);
 
                 if (config.getMaxAcceptableDistance() > 0 &&
                         dist > config.getMaxAcceptableDistance()) {
@@ -59,13 +60,17 @@ public class TargetFinder {
 
                 if (dist < bestDist) {
                     bestDist = dist;
-                    best = p; // ❗ KHÔNG cộng offset ở đây
+                    best = point;
                 }
             }
         }
 
         if (config.isDebugSaveImage()) {
             saveDebug(screen);
+        }
+
+        if (best != null) {
+            System.out.println("🎯 Selected nearest target: " + best.x + "," + best.y + " distance=" + bestDist);
         }
 
         return best;
@@ -76,6 +81,7 @@ public class TargetFinder {
             File file = new File(config.getDebugImagePath());
             ImageIO.write(img, "png", file);
             System.out.println("📸 Saved debug image");
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
     }
 }
