@@ -23,21 +23,29 @@ public class MainUI extends JFrame {
     private boolean running = false;
     private OverlayFrame overlay;
 
+    // 🔥 giữ reference để stop
+    private Timer overlayTimer;
+
     public MainUI(BotController controller, ToolVptProperties config) {
         this.controller = controller;
         this.config = config;
 
+        initUI();
+        bindEvents();
+    }
+
+    // ================= INIT =================
+
+    private void initUI() {
         setTitle("Tool Auto VPT");
         setSize(420, 280);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        // ===== STATUS =====
         statusLabel.setFont(new Font("Arial", Font.BOLD, 18));
         add(statusLabel, BorderLayout.NORTH);
 
-        // ===== CENTER =====
         JPanel centerPanel = new JPanel(new GridLayout(3, 1));
 
         JPanel targetPanel = new JPanel();
@@ -52,7 +60,6 @@ public class MainUI extends JFrame {
 
         add(centerPanel, BorderLayout.CENTER);
 
-        // ===== BUTTON =====
         JPanel panel = new JPanel();
         panel.add(startBtn);
         panel.add(stopBtn);
@@ -60,24 +67,28 @@ public class MainUI extends JFrame {
         add(panel, BorderLayout.SOUTH);
 
         stopBtn.setEnabled(false);
+    }
 
-        // ===== ACTION =====
+    private void bindEvents() {
+
         startBtn.addActionListener(e -> start());
         stopBtn.addActionListener(e -> stop());
 
         overlayBtn.addActionListener(e -> toggleOverlay());
 
-        // ===== HOTKEY =====
+        // 🔥 hotkey
         KeyboardFocusManager.getCurrentKeyboardFocusManager()
                 .addKeyEventDispatcher(e -> {
-                    if (e.getID() == KeyEvent.KEY_PRESSED && e.getKeyCode() == KeyEvent.VK_F6) {
-                        toggle();
+                    if (e.getID() == KeyEvent.KEY_PRESSED &&
+                            e.getKeyCode() == KeyEvent.VK_F6) {
+
+                        SwingUtilities.invokeLater(this::toggle);
                         return true;
                     }
                     return false;
                 });
 
-        // ===== TARGET CHANGE =====
+        // 🔥 target change
         targetBox.addActionListener(e -> {
             String selected = (String) targetBox.getSelectedItem();
             controller.setTarget(selected);
@@ -87,33 +98,52 @@ public class MainUI extends JFrame {
     // ================= OVERLAY =================
 
     private void toggleOverlay() {
+
         if (overlay == null) {
-
-            overlay = new OverlayFrame(
-                    config.getWindowX(),
-                    config.getWindowY(),
-                    config.getRegionWidth(),
-                    config.getRegionHeight()
-            );
-
-            overlay.setVisible(true);
-            overlayBtn.setText("Hide Overlay");
-
-            // 🔥 sync ngay
-            controller.updateRegion(overlay.getBounds());
-
-            // 🔥 sync liên tục khi drag
-            new Timer(200, e -> {
-                if (overlay != null) {
-                    controller.updateRegion(overlay.getBounds());
-                }
-            }).start();
-
+            showOverlay();
         } else {
+            hideOverlay();
+        }
+    }
+
+    private void showOverlay() {
+
+        overlay = new OverlayFrame(
+                config.getWindowX(),
+                config.getWindowY(),
+                config.getRegionWidth(),
+                config.getRegionHeight()
+        );
+
+        overlay.setVisible(true);
+        overlayBtn.setText("Hide Overlay");
+
+        // sync lần đầu
+        controller.updateRegion(overlay.getBounds());
+
+        // 🔥 timer có kiểm soát
+        overlayTimer = new Timer(200, e -> {
+            if (overlay != null) {
+                controller.updateRegion(overlay.getBounds());
+            }
+        });
+
+        overlayTimer.start();
+    }
+
+    private void hideOverlay() {
+
+        if (overlayTimer != null) {
+            overlayTimer.stop();
+            overlayTimer = null;
+        }
+
+        if (overlay != null) {
             overlay.dispose();
             overlay = null;
-            overlayBtn.setText("Show Overlay");
         }
+
+        overlayBtn.setText("Show Overlay");
     }
 
     // ================= CONTROL =================

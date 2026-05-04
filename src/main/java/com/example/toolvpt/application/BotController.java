@@ -25,11 +25,16 @@ public class BotController {
         return engine.isRunning();
     }
 
-    // ✅ fix đúng
+    /**
+     * Set target (Orc / Boss / ...)
+     */
     public void setTarget(String target) {
         engine.setTarget(target);
     }
 
+    /**
+     * Update vùng scan (overlay UI)
+     */
     public void updateRegion(Rectangle rect) {
         engine.updateRegion(rect);
     }

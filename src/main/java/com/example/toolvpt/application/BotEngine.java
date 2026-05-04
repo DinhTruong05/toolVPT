@@ -8,6 +8,7 @@ import com.example.toolvpt.infrastructure.screen.ScreenCaptureService;
 import com.example.toolvpt.infrastructure.screen.TemplateMatcher;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -23,6 +24,7 @@ public class BotEngine {
     private final ScreenCaptureService screenService;
     private final TargetFinder targetFinder;
     private final DecisionEngine decision;
+    private final WindowSelector windowSelector;
 
     private volatile boolean running = false;
     private volatile String currentTarget = "Orc";
@@ -30,7 +32,6 @@ public class BotEngine {
     private Thread botThread;
     private long lastClickTime = 0;
 
-    // vùng scan dynamic (overlay)
     private volatile Rectangle dynamicRegion;
 
     public BotEngine(
@@ -38,19 +39,26 @@ public class BotEngine {
             ToolVptProperties config,
             InputController input,
             ScreenCaptureService screenService,
-            TemplateMatcher matcher
+            TemplateMatcher matcher,
+            WindowSelector windowSelector
     ) {
         this.service = service;
         this.config = config;
         this.input = input;
         this.screenService = screenService;
         this.decision = new DecisionEngine();
+        this.windowSelector = windowSelector;
 
-        // load template 1 lần
         List<BufferedImage> templates = loadTemplates();
-
-        // inject đúng dependency
         this.targetFinder = new TargetFinder(matcher, templates, config);
+    }
+
+    /**
+     * 🔥 Chọn window ngay khi start app
+     */
+    @PostConstruct
+    public void init() {
+        windowSelector.select();
     }
 
     // ================= LOOP =================
@@ -96,7 +104,6 @@ public class BotEngine {
                 System.out.println("🎁 Click reward");
             }
             default -> {
-                // NONE / IDLE
             }
         }
     }
@@ -107,7 +114,6 @@ public class BotEngine {
         try {
             Rectangle region = getScanRegion();
 
-            // capture đúng vùng
             BufferedImage screen = screenService.capture(region);
 
             Point target;
@@ -120,7 +126,7 @@ public class BotEngine {
 
             long now = System.currentTimeMillis();
 
-            if (target != null && now - lastClickTime > 1200) {
+            if (target != null && now - lastClickTime > 1000) {
 
                 int clickX = target.x + region.x;
                 int clickY = target.y + region.y;
@@ -139,16 +145,28 @@ public class BotEngine {
         }
     }
 
+    /**
+     * 🔥 FIX: đảm bảo region hợp lệ
+     */
     private Rectangle getScanRegion() {
+
         if (dynamicRegion != null) {
             return dynamicRegion;
         }
 
+        int width = config.getRegionWidth() > 0
+                ? config.getRegionWidth()
+                : config.getWindowWidth();
+
+        int height = config.getRegionHeight() > 0
+                ? config.getRegionHeight()
+                : config.getWindowHeight();
+
         return new Rectangle(
                 config.getWindowX(),
                 config.getWindowY(),
-                config.getRegionWidth(),
-                config.getRegionHeight()
+                width,
+                height
         );
     }
 

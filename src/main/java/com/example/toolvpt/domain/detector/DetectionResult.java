@@ -1,13 +1,24 @@
 package com.example.toolvpt.domain.detector;
 
-public class DetectionResult {
-    private final String state;
+import com.example.toolvpt.domain.decision.GameState;
 
-    public DetectionResult(String state) {
+/**
+ * Kết quả detect trạng thái game
+ */
+public class DetectionResult {
+
+    private final GameState state;
+
+    public DetectionResult(GameState state) {
         this.state = state;
     }
 
-    public String getState() {
+    public GameState getState() {
         return state;
+    }
+
+    @Override
+    public String toString() {
+        return "DetectionResult{state=" + state + '}';
     }
 }

@@ -5,7 +5,7 @@ import com.example.toolvpt.infrastructure.screen.TemplateMatcher;
 import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
-import java.awt.Point;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
@@ -39,17 +39,32 @@ public class TargetFinder {
         int width = screen.getWidth();
         int height = screen.getHeight();
 
-        Point best = null;
-        double bestDist = Double.MAX_VALUE;
-
         int centerX = width / 2;
         int centerY = height / 2;
+
+        // 🔥 chỉ scan vùng gần center để tăng tốc
+        int radius = config.getScanRadius() > 0 ? config.getScanRadius() : 300;
+
+        int minX = Math.max(0, centerX - radius);
+        int maxX = Math.min(width, centerX + radius);
+
+        int minY = Math.max(0, centerY - radius);
+        int maxY = Math.min(height, centerY + radius);
+
+        Point best = null;
+        double bestDist = Double.MAX_VALUE;
 
         for (BufferedImage template : list) {
 
             List<Point> points = matcher.findPoints(screen, template);
 
             for (Point point : points) {
+
+                // 🔥 lọc theo vùng scan
+                if (point.x < minX || point.x > maxX ||
+                        point.y < minY || point.y > maxY) {
+                    continue;
+                }
 
                 double dist = Math.hypot(point.x - centerX, point.y - centerY);
 
@@ -66,22 +81,47 @@ public class TargetFinder {
         }
 
         if (config.isDebugSaveImage()) {
-            saveDebug(screen);
+            saveDebug(screen, best);
         }
 
         if (best != null) {
-            System.out.println("🎯 Selected nearest target: " + best.x + "," + best.y + " distance=" + bestDist);
+            System.out.println("🎯 Selected target: " +
+                    best.x + "," + best.y + " dist=" + bestDist);
+        } else {
+            System.out.println("❌ No target found");
         }
 
         return best;
     }
 
-    private void saveDebug(BufferedImage img) {
+    /**
+     * Lưu ảnh debug + vẽ target
+     */
+    private void saveDebug(BufferedImage img, Point target) {
         try {
+            BufferedImage copy = new BufferedImage(
+                    img.getWidth(),
+                    img.getHeight(),
+                    BufferedImage.TYPE_INT_RGB
+            );
+
+            Graphics2D g = copy.createGraphics();
+            g.drawImage(img, 0, 0, null);
+
+            if (target != null) {
+                g.setColor(Color.RED);
+                g.setStroke(new BasicStroke(3));
+                g.drawOval(target.x - 10, target.y - 10, 20, 20);
+            }
+
+            g.dispose();
+
             File file = new File(config.getDebugImagePath());
-            ImageIO.write(img, "png", file);
+            ImageIO.write(copy, "png", file);
+
             System.out.println("📸 Saved debug image");
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            System.out.println("⚠️ Debug save failed: " + e.getMessage());
         }
     }
 }

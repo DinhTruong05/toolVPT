@@ -20,6 +20,9 @@ public class ToolServiceImpl implements ToolService {
 
     @Override
     public long getInterval() {
-        return runner.getInterval();
+        long interval = runner.getInterval();
+
+        // 🔥 tránh trường hợp trả về 0 gây loop CPU 100%
+        return interval > 0 ? interval : 100;
     }
 }

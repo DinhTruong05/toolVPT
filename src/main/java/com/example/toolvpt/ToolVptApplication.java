@@ -8,11 +8,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 
-import javax.swing.SwingUtilities;
-import java.awt.GraphicsEnvironment;
+import javax.swing.*;
+import java.awt.*;
 
 @SpringBootApplication
 public class ToolVptApplication {
@@ -20,38 +19,61 @@ public class ToolVptApplication {
     private static final Logger log = LoggerFactory.getLogger(ToolVptApplication.class);
 
     public static void main(String[] args) {
-        // 🔥 Fix headless & DPI scale (rất quan trọng cho Robot + UI)
+
+        // 🔥 Fix headless & DPI
         System.setProperty("java.awt.headless", "false");
         System.setProperty("sun.java2d.uiScale", "1.0");
 
         SpringApplication.run(ToolVptApplication.class, args);
     }
 
+    /**
+     * 🔥 Inject trực tiếp bean (clean hơn)
+     */
     @Bean
-    public CommandLineRunner run(ApplicationContext context) {
+    public CommandLineRunner run(BotController controller,
+                                 ToolVptProperties config) {
+
         return args -> {
-            // 🔍 Debug môi trường
+
             log.info("Is headless: {}", GraphicsEnvironment.isHeadless());
 
-            // 🚀 Luôn chạy UI trên EDT
+            // 🔥 chạy UI đúng thread
             SwingUtilities.invokeLater(() -> {
                 try {
+
+                    setupLookAndFeel();
+
                     log.info("Starting Tool VPT UI...");
 
-                    ToolVptProperties config = context.getBean(ToolVptProperties.class);
-                    BotController controller = context.getBean(BotController.class);
-
                     MainUI ui = new MainUI(controller, config);
-                    ui.setLocationRelativeTo(null); // center màn hình
+                    ui.setLocationRelativeTo(null);
                     ui.setVisible(true);
 
                     log.info("UI started successfully");
 
                 } catch (Exception e) {
-                    log.error("Failed to start Tool VPT UI", e);
-                    System.exit(1);
+                    log.error("Failed to start UI", e);
+
+                    // ❗ không exit thô
+                    JOptionPane.showMessageDialog(
+                            null,
+                            "Không thể khởi động UI\n" + e.getMessage(),
+                            "Error",
+                            JOptionPane.ERROR_MESSAGE
+                    );
                 }
             });
         };
+    }
+
+    /**
+     * 🔥 UI đẹp hơn chút 😄
+     */
+    private void setupLookAndFeel() {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception ignored) {
+        }
     }
 }

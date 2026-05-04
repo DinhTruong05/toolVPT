@@ -4,6 +4,11 @@ import java.awt.image.BufferedImage;
 
 public class ImageUtils {
 
+    private static final int STEP = 2;
+
+    /**
+     * So sánh 2 ảnh (trả về 0 → 1, càng cao càng giống)
+     */
     public static double compare(BufferedImage img1, BufferedImage img2) {
 
         int width = Math.min(img1.getWidth(), img2.getWidth());
@@ -12,33 +17,34 @@ public class ImageUtils {
         long diff = 0;
         int count = 0;
 
-        for (int y = 0; y < height; y += 2) {
-            for (int x = 0; x < width; x += 2) {
+        for (int y = 0; y < height; y += STEP) {
+            for (int x = 0; x < width; x += STEP) {
 
-                int rgb1 = img1.getRGB(x, y);
-                int rgb2 = img2.getRGB(x, y);
+                int g1 = gray(img1.getRGB(x, y));
+                int g2 = gray(img2.getRGB(x, y));
 
-                diff += colorDiff(rgb1, rgb2);
+                diff += Math.abs(g1 - g2);
                 count++;
+
+                // 🔥 early stop nếu lệch quá nhiều
+                if (count > 50 && diff / (double) count > 80) {
+                    return 0.0;
+                }
             }
         }
 
-        double maxDiff = 255.0 * 3 * count;
+        double maxDiff = 255.0 * count;
 
         return 1.0 - (diff / maxDiff);
     }
 
-    private static int colorDiff(int c1, int c2) {
-        int r1 = (c1 >> 16) & 0xff;
-        int g1 = (c1 >> 8) & 0xff;
-        int b1 = c1 & 0xff;
-
-        int r2 = (c2 >> 16) & 0xff;
-        int g2 = (c2 >> 8) & 0xff;
-        int b2 = c2 & 0xff;
-
-        return Math.abs(r1 - r2)
-                + Math.abs(g1 - g2)
-                + Math.abs(b1 - b2);
+    /**
+     * Convert RGB → grayscale
+     */
+    private static int gray(int rgb) {
+        int r = (rgb >> 16) & 0xff;
+        int g = (rgb >> 8) & 0xff;
+        int b = rgb & 0xff;
+        return (r + g + b) / 3;
     }
 }

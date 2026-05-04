@@ -1,29 +1,57 @@
 package com.example.toolvpt.config;
 
+import jakarta.annotation.PostConstruct;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
-
 
 @Component
 @ConfigurationProperties(prefix = "toolvpt")
 public class ToolVptProperties {
 
-    private int windowX;
-    private int windowY;
-    private int windowWidth;
-    private int windowHeight;
+    // ===== WINDOW =====
+    private int windowX = 0;
+    private int windowY = 0;
+    private int windowWidth = 800;
+    private int windowHeight = 600;
 
-    private int regionWidth;
-    private int regionHeight;
+    // ===== REGION SCAN =====
+    private int regionWidth = 400;
+    private int regionHeight = 300;
 
-    private double maxAcceptableDistance;
+    // 🔥 NEW: bán kính scan quanh center (quan trọng)
+    private int scanRadius = 300;
 
-    private boolean debugSaveImage;
-    private String debugImagePath;
+    // ===== TARGET FILTER =====
+    private double maxAcceptableDistance = 0; // 0 = disable
+    private double minDistanceGap = 0;
 
-    private double minDistanceGap;
+    // ===== DEBUG =====
+    private boolean debugSaveImage = false;
+    private String debugImagePath = "debug.png";
 
-    private long captureIntervalMs;
+    // ===== LOOP =====
+    private long captureIntervalMs = 100;
+
+    // ===== VALIDATION =====
+    @PostConstruct
+    public void validate() {
+
+        if (windowWidth <= 0 || windowHeight <= 0) {
+            throw new IllegalArgumentException("Window size must be > 0");
+        }
+
+        if (scanRadius <= 0) {
+            scanRadius = 300;
+        }
+
+        if (captureIntervalMs < 10) {
+            captureIntervalMs = 10; // tránh CPU 100%
+        }
+
+        if (debugImagePath == null || debugImagePath.isBlank()) {
+            debugImagePath = "debug.png";
+        }
+    }
 
     // ===== GETTER & SETTER =====
 
@@ -75,6 +103,14 @@ public class ToolVptProperties {
         this.regionHeight = regionHeight;
     }
 
+    public int getScanRadius() {
+        return scanRadius;
+    }
+
+    public void setScanRadius(int scanRadius) {
+        this.scanRadius = scanRadius;
+    }
+
     public double getMaxAcceptableDistance() {
         return maxAcceptableDistance;
     }
@@ -83,7 +119,7 @@ public class ToolVptProperties {
         this.maxAcceptableDistance = maxAcceptableDistance;
     }
 
-    public boolean isDebugSaveImage() { // ✅ chuẩn Java Bean
+    public boolean isDebugSaveImage() {
         return debugSaveImage;
     }
 
