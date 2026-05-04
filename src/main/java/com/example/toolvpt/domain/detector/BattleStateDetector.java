@@ -1,16 +1,13 @@
 package com.example.toolvpt.domain.detector;
 
-import com.example.toolvpt.config.ToolVptProperties;
-import com.example.toolvpt.domain.decision.GameState;
 import com.example.toolvpt.infrastructure.screen.ImageUtils;
 import com.example.toolvpt.infrastructure.screen.ScreenCaptureService;
-import org.springframework.stereotype.Component;
+import com.example.toolvpt.config.ToolVptProperties;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
 
-@Component
 public class BattleStateDetector {
 
     private final ScreenCaptureService screenService;
@@ -19,77 +16,58 @@ public class BattleStateDetector {
     private BufferedImage fightingSample;
     private BufferedImage idleSample;
 
-    // 🔥 threshold có thể config sau
-    private static final double THRESHOLD = 0.8;
-
-    public BattleStateDetector(ScreenCaptureService screenService,
-                               ToolVptProperties config) {
+    public BattleStateDetector(ScreenCaptureService screenService, ToolVptProperties config) {
         this.screenService = screenService;
         this.config = config;
         loadSamples();
     }
 
     private void loadSamples() {
-        try {
-            fightingSample = loadImage("samples/fighting.png");
-            idleSample = loadImage("samples/idle.png");
+        try (InputStream f = getClass().getClassLoader().getResourceAsStream("samples/fighting.png");
+             InputStream i = getClass().getClassLoader().getResourceAsStream("samples/idle.png")) {
+
+            if (f == null || i == null) {
+                throw new IllegalStateException("Missing detector sample images in resources/samples");
+            }
+
+            fightingSample = ImageIO.read(f);
+            idleSample = ImageIO.read(i);
+
+            if (fightingSample == null || idleSample == null) {
+                throw new IllegalStateException("Detector sample images cannot be decoded");
+            }
 
         } catch (Exception e) {
-            throw new RuntimeException("❌ Load sample failed", e);
+            throw new RuntimeException("Load sample failed", e);
         }
-    }
-
-    private BufferedImage loadImage(String path) throws Exception {
-        InputStream is = getClass().getClassLoader().getResourceAsStream(path);
-
-        if (is == null) {
-            throw new RuntimeException("❌ Missing resource: " + path);
-        }
-
-        return ImageIO.read(is);
     }
 
     public DetectionResult detect() {
-
         BufferedImage screen = screenService.capture();
 
-        BufferedImage region = cropSafe(screen,
-                500, 300,   // TODO: nên đưa vào config
-                200, 100
-        );
+        // ⚠️ crop vùng quan trọng (fix theo game bạn)
+        int regionX = config.getDetectRegionX() > 0 ? config.getDetectRegionX() : 500;
+        int regionY = config.getDetectRegionY() > 0 ? config.getDetectRegionY() : 300;
+        int regionW = config.getDetectRegionWidth() > 0 ? config.getDetectRegionWidth() : 200;
+        int regionH = config.getDetectRegionHeight() > 0 ? config.getDetectRegionHeight() : 100;
+
+        int startX = Math.max(0, Math.min(regionX, screen.getWidth() - 1));
+        int startY = Math.max(0, Math.min(regionY, screen.getHeight() - 1));
+        int w = Math.min(regionW, screen.getWidth() - startX);
+        int h = Math.min(regionH, screen.getHeight() - startY);
+
+        if (w <= 0 || h <= 0) {
+            return new DetectionResult("UNKNOWN");
+        }
+
+        BufferedImage region = screen.getSubimage(startX, startY, w, h);
 
         double fightScore = ImageUtils.compare(region, fightingSample);
         double idleScore = ImageUtils.compare(region, idleSample);
 
-        System.out.println("📊 fight=" + fightScore + " idle=" + idleScore);
+        if (fightScore > 0.8) return new DetectionResult("FIGHTING");
+        if (idleScore > 0.8) return new DetectionResult("IDLE");
 
-        if (fightScore > THRESHOLD) {
-            return new DetectionResult(GameState.FIGHTING);
-        }
-
-        if (idleScore > THRESHOLD) {
-            return new DetectionResult(GameState.IDLE);
-        }
-
-        return new DetectionResult(GameState.UNKNOWN);
-    }
-
-    /**
-     * 🔥 Crop an toàn tránh crash
-     */
-    private BufferedImage cropSafe(BufferedImage src,
-                                   int x, int y, int w, int h) {
-
-        int maxW = src.getWidth();
-        int maxH = src.getHeight();
-
-        if (x + w > maxW) w = maxW - x;
-        if (y + h > maxH) h = maxH - y;
-
-        if (w <= 0 || h <= 0) {
-            throw new RuntimeException("❌ Invalid crop region");
-        }
-
-        return src.getSubimage(x, y, w, h);
+        return new DetectionResult("UNKNOWN");
     }
 }

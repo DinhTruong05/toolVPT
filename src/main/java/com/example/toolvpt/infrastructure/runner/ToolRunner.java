@@ -1,35 +1,25 @@
 package com.example.toolvpt.infrastructure.runner;
 
-import com.example.toolvpt.config.ToolVptProperties;
 import com.example.toolvpt.domain.detector.BattleStateDetector;
 import com.example.toolvpt.domain.detector.DetectionResult;
+import com.example.toolvpt.config.ToolVptProperties;
+import com.example.toolvpt.infrastructure.screen.ScreenCaptureService;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ToolRunner {
 
     private final BattleStateDetector detector;
-    private final ToolVptProperties config;
 
-    public ToolRunner(BattleStateDetector detector,
-                      ToolVptProperties config) {
-        this.detector = detector;
-        this.config = config;
+    public ToolRunner(ScreenCaptureService screenService, ToolVptProperties config) {
+        this.detector = new BattleStateDetector(screenService, config);
     }
 
-    /**
-     * Detect trạng thái game
-     */
     public DetectionResult detect() {
         return detector.detect();
     }
 
-    /**
-     * 🔥 Interval lấy từ config (không hardcode)
-     */
     public long getInterval() {
-        return config.getCaptureIntervalMs() > 0
-                ? config.getCaptureIntervalMs()
-                : 100;
+        return 500;
     }
 }

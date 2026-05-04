@@ -1,57 +1,38 @@
 package com.example.toolvpt.config;
 
-import jakarta.annotation.PostConstruct;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+
 
 @Component
 @ConfigurationProperties(prefix = "toolvpt")
 public class ToolVptProperties {
 
-    // ===== WINDOW =====
-    private int windowX = 0;
-    private int windowY = 0;
-    private int windowWidth = 800;
-    private int windowHeight = 600;
+    private int windowX;
+    private int windowY;
+    private int windowWidth;
+    private int windowHeight;
 
-    // ===== REGION SCAN =====
-    private int regionWidth = 400;
-    private int regionHeight = 300;
+    private int regionWidth;
+    private int regionHeight;
 
-    // 🔥 NEW: bán kính scan quanh center (quan trọng)
-    private int scanRadius = 300;
+    private double maxAcceptableDistance;
 
-    // ===== TARGET FILTER =====
-    private double maxAcceptableDistance = 0; // 0 = disable
-    private double minDistanceGap = 0;
+    private boolean debugSaveImage;
+    private String debugImagePath;
 
-    // ===== DEBUG =====
-    private boolean debugSaveImage = false;
-    private String debugImagePath = "debug.png";
+    private double minDistanceGap;
 
-    // ===== LOOP =====
-    private long captureIntervalMs = 100;
+    private long captureIntervalMs;
 
-    // ===== VALIDATION =====
-    @PostConstruct
-    public void validate() {
+    private int detectRegionX;
+    private int detectRegionY;
+    private int detectRegionWidth;
+    private int detectRegionHeight;
 
-        if (windowWidth <= 0 || windowHeight <= 0) {
-            throw new IllegalArgumentException("Window size must be > 0");
-        }
-
-        if (scanRadius <= 0) {
-            scanRadius = 300;
-        }
-
-        if (captureIntervalMs < 10) {
-            captureIntervalMs = 10; // tránh CPU 100%
-        }
-
-        if (debugImagePath == null || debugImagePath.isBlank()) {
-            debugImagePath = "debug.png";
-        }
-    }
+    private double matcherAcceptScore;
+    private int matcherStep;
+    private int matcherMaxResults;
 
     // ===== GETTER & SETTER =====
 
@@ -103,14 +84,6 @@ public class ToolVptProperties {
         this.regionHeight = regionHeight;
     }
 
-    public int getScanRadius() {
-        return scanRadius;
-    }
-
-    public void setScanRadius(int scanRadius) {
-        this.scanRadius = scanRadius;
-    }
-
     public double getMaxAcceptableDistance() {
         return maxAcceptableDistance;
     }
@@ -119,7 +92,7 @@ public class ToolVptProperties {
         this.maxAcceptableDistance = maxAcceptableDistance;
     }
 
-    public boolean isDebugSaveImage() {
+    public boolean isDebugSaveImage() { // ✅ chuẩn Java Bean
         return debugSaveImage;
     }
 
@@ -149,5 +122,61 @@ public class ToolVptProperties {
 
     public void setCaptureIntervalMs(long captureIntervalMs) {
         this.captureIntervalMs = captureIntervalMs;
+    }
+
+    public int getDetectRegionX() {
+        return detectRegionX;
+    }
+
+    public void setDetectRegionX(int detectRegionX) {
+        this.detectRegionX = detectRegionX;
+    }
+
+    public int getDetectRegionY() {
+        return detectRegionY;
+    }
+
+    public void setDetectRegionY(int detectRegionY) {
+        this.detectRegionY = detectRegionY;
+    }
+
+    public int getDetectRegionWidth() {
+        return detectRegionWidth;
+    }
+
+    public void setDetectRegionWidth(int detectRegionWidth) {
+        this.detectRegionWidth = detectRegionWidth;
+    }
+
+    public int getDetectRegionHeight() {
+        return detectRegionHeight;
+    }
+
+    public void setDetectRegionHeight(int detectRegionHeight) {
+        this.detectRegionHeight = detectRegionHeight;
+    }
+
+    public double getMatcherAcceptScore() {
+        return matcherAcceptScore;
+    }
+
+    public void setMatcherAcceptScore(double matcherAcceptScore) {
+        this.matcherAcceptScore = matcherAcceptScore;
+    }
+
+    public int getMatcherStep() {
+        return matcherStep;
+    }
+
+    public void setMatcherStep(int matcherStep) {
+        this.matcherStep = matcherStep;
+    }
+
+    public int getMatcherMaxResults() {
+        return matcherMaxResults;
+    }
+
+    public void setMatcherMaxResults(int matcherMaxResults) {
+        this.matcherMaxResults = matcherMaxResults;
     }
 }

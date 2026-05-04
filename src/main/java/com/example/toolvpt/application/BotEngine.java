@@ -30,7 +30,7 @@ public class BotEngine {
     private Thread botThread;
     private long lastClickTime = 0;
 
-    // vùng scan (có thể update từ overlay)
+    // vùng scan dynamic (overlay)
     private volatile Rectangle dynamicRegion;
 
     public BotEngine(
@@ -46,7 +46,10 @@ public class BotEngine {
         this.screenService = screenService;
         this.decision = new DecisionEngine();
 
+        // load template 1 lần
         List<BufferedImage> templates = loadTemplates();
+
+        // inject đúng dependency
         this.targetFinder = new TargetFinder(matcher, templates, config);
     }
 
@@ -71,7 +74,6 @@ public class BotEngine {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
-                System.err.println("❌ Bot error:");
                 e.printStackTrace();
             }
         }
@@ -85,19 +87,16 @@ public class BotEngine {
     private void execute(BotAction action) {
         switch (action) {
             case SEARCH_ENEMY -> searchAndClick();
-
             case ATTACK -> {
                 input.pressSpace();
                 System.out.println("⚔️ Attack");
             }
-
             case CLICK_REWARD -> {
-                input.click(700, 400); // TODO: config hóa sau
+                input.click(700, 400);
                 System.out.println("🎁 Click reward");
             }
-
             default -> {
-                // NONE
+                // NONE / IDLE
             }
         }
     }
@@ -105,27 +104,30 @@ public class BotEngine {
     // ================= TARGET =================
 
     private void searchAndClick() {
-
-        // 🔥 validate window trước
-        if (!isWindowValid()) {
-            System.out.println("❌ Window chưa được chọn!");
-            return;
-        }
-
         try {
             Rectangle region = getScanRegion();
 
+            // capture đúng vùng
             BufferedImage screen = screenService.capture(region);
 
-            Point target = switch (currentTarget) {
-                case "Orc" -> targetFinder.findOnly(screen, 0);
-                case "Boss" -> targetFinder.findOnly(screen, 1);
-                default -> targetFinder.findNearest(screen);
-            };
+            Point target;
+            boolean fallbackUsed = false;
+
+            switch (currentTarget) {
+                case "Orc" -> target = targetFinder.findOnly(screen, 0);
+                case "Boss" -> target = targetFinder.findOnly(screen, 1);
+                default -> target = targetFinder.findNearest(screen);
+            }
+
+            // fallback: nếu target được chọn không thấy thì thử toàn bộ template
+            if (target == null && ("Orc".equals(currentTarget) || "Boss".equals(currentTarget))) {
+                target = targetFinder.findNearest(screen);
+                fallbackUsed = target != null;
+            }
 
             long now = System.currentTimeMillis();
 
-            if (target != null && now - lastClickTime > 1000) {
+            if (target != null && now - lastClickTime > 1200) {
 
                 int clickX = target.x + region.x;
                 int clickY = target.y + region.y;
@@ -134,71 +136,46 @@ public class BotEngine {
                 lastClickTime = now;
 
                 System.out.println("🎯 Click: " + clickX + "," + clickY);
+                if (fallbackUsed) {
+                    System.out.println("↪️ Fallback target used (nearest available)");
+                }
 
             } else if (target == null) {
                 System.out.println("❌ No target found");
             }
 
         } catch (Exception e) {
-            System.err.println("❌ searchAndClick error:");
             e.printStackTrace();
         }
     }
 
-    /**
-     * 🔥 Kiểm tra window hợp lệ
-     */
-    private boolean isWindowValid() {
-        return config.getWindowWidth() > 0 && config.getWindowHeight() > 0;
-    }
-
-    /**
-     * 🔥 Lấy vùng scan
-     */
     private Rectangle getScanRegion() {
-
         if (dynamicRegion != null) {
             return dynamicRegion;
         }
 
-        int width = config.getRegionWidth() > 0
-                ? config.getRegionWidth()
-                : config.getWindowWidth();
-
-        int height = config.getRegionHeight() > 0
-                ? config.getRegionHeight()
-                : config.getWindowHeight();
-
         return new Rectangle(
                 config.getWindowX(),
                 config.getWindowY(),
-                width,
-                height
+                config.getRegionWidth(),
+                config.getRegionHeight()
         );
     }
 
     // ================= CONTROL =================
 
     public synchronized void start() {
-
         if (running) return;
-
-        if (!isWindowValid()) {
-            System.out.println("❌ Cannot start bot: chưa chọn window!");
-            return;
-        }
 
         running = true;
 
         botThread = new Thread(this::loop, "toolvpt-bot-thread");
-        botThread.setDaemon(true); // 🔥 không block JVM
         botThread.start();
 
         System.out.println("✅ Bot started");
     }
 
     public synchronized void stop() {
-
         running = false;
 
         if (botThread != null) {
