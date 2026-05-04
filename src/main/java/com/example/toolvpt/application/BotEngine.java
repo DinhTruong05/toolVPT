@@ -8,7 +8,6 @@ import com.example.toolvpt.infrastructure.screen.ScreenCaptureService;
 import com.example.toolvpt.infrastructure.screen.TemplateMatcher;
 import org.springframework.stereotype.Component;
 
-import jakarta.annotation.PostConstruct;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -24,7 +23,6 @@ public class BotEngine {
     private final ScreenCaptureService screenService;
     private final TargetFinder targetFinder;
     private final DecisionEngine decision;
-    private final WindowSelector windowSelector;
 
     private volatile boolean running = false;
     private volatile String currentTarget = "Orc";
@@ -32,6 +30,7 @@ public class BotEngine {
     private Thread botThread;
     private long lastClickTime = 0;
 
+    // vùng scan (có thể update từ overlay)
     private volatile Rectangle dynamicRegion;
 
     public BotEngine(
@@ -39,26 +38,16 @@ public class BotEngine {
             ToolVptProperties config,
             InputController input,
             ScreenCaptureService screenService,
-            TemplateMatcher matcher,
-            WindowSelector windowSelector
+            TemplateMatcher matcher
     ) {
         this.service = service;
         this.config = config;
         this.input = input;
         this.screenService = screenService;
         this.decision = new DecisionEngine();
-        this.windowSelector = windowSelector;
 
         List<BufferedImage> templates = loadTemplates();
         this.targetFinder = new TargetFinder(matcher, templates, config);
-    }
-
-    /**
-     * 🔥 Chọn window ngay khi start app
-     */
-    @PostConstruct
-    public void init() {
-        windowSelector.select();
     }
 
     // ================= LOOP =================
@@ -82,6 +71,7 @@ public class BotEngine {
                 Thread.currentThread().interrupt();
                 break;
             } catch (Exception e) {
+                System.err.println("❌ Bot error:");
                 e.printStackTrace();
             }
         }
@@ -95,15 +85,19 @@ public class BotEngine {
     private void execute(BotAction action) {
         switch (action) {
             case SEARCH_ENEMY -> searchAndClick();
+
             case ATTACK -> {
                 input.pressSpace();
                 System.out.println("⚔️ Attack");
             }
+
             case CLICK_REWARD -> {
-                input.click(700, 400);
+                input.click(700, 400); // TODO: config hóa sau
                 System.out.println("🎁 Click reward");
             }
+
             default -> {
+                // NONE
             }
         }
     }
@@ -111,18 +105,23 @@ public class BotEngine {
     // ================= TARGET =================
 
     private void searchAndClick() {
+
+        // 🔥 validate window trước
+        if (!isWindowValid()) {
+            System.out.println("❌ Window chưa được chọn!");
+            return;
+        }
+
         try {
             Rectangle region = getScanRegion();
 
             BufferedImage screen = screenService.capture(region);
 
-            Point target;
-
-            switch (currentTarget) {
-                case "Orc" -> target = targetFinder.findOnly(screen, 0);
-                case "Boss" -> target = targetFinder.findOnly(screen, 1);
-                default -> target = targetFinder.findNearest(screen);
-            }
+            Point target = switch (currentTarget) {
+                case "Orc" -> targetFinder.findOnly(screen, 0);
+                case "Boss" -> targetFinder.findOnly(screen, 1);
+                default -> targetFinder.findNearest(screen);
+            };
 
             long now = System.currentTimeMillis();
 
@@ -141,12 +140,20 @@ public class BotEngine {
             }
 
         } catch (Exception e) {
+            System.err.println("❌ searchAndClick error:");
             e.printStackTrace();
         }
     }
 
     /**
-     * 🔥 FIX: đảm bảo region hợp lệ
+     * 🔥 Kiểm tra window hợp lệ
+     */
+    private boolean isWindowValid() {
+        return config.getWindowWidth() > 0 && config.getWindowHeight() > 0;
+    }
+
+    /**
+     * 🔥 Lấy vùng scan
      */
     private Rectangle getScanRegion() {
 
@@ -173,17 +180,25 @@ public class BotEngine {
     // ================= CONTROL =================
 
     public synchronized void start() {
+
         if (running) return;
+
+        if (!isWindowValid()) {
+            System.out.println("❌ Cannot start bot: chưa chọn window!");
+            return;
+        }
 
         running = true;
 
         botThread = new Thread(this::loop, "toolvpt-bot-thread");
+        botThread.setDaemon(true); // 🔥 không block JVM
         botThread.start();
 
         System.out.println("✅ Bot started");
     }
 
     public synchronized void stop() {
+
         running = false;
 
         if (botThread != null) {

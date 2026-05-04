@@ -2,173 +2,239 @@ package com.example.toolvpt.ui;
 
 import com.example.toolvpt.application.BotController;
 import com.example.toolvpt.config.ToolVptProperties;
+import com.example.toolvpt.infrastructure.window.WindowScanner;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.KeyEvent;
 
 public class MainUI extends JFrame {
 
-    private final JLabel statusLabel = new JLabel("STOP", SwingConstants.CENTER);
+    private final JLabel statusLabel = new JLabel("STOP");
+    private final JLabel selectedWindowLabel = new JLabel("No window selected");
+
     private final JButton startBtn = new JButton("Start");
     private final JButton stopBtn = new JButton("Stop");
-    private final JButton overlayBtn = new JButton("Show Overlay");
+    private final JButton refreshBtn = new JButton("⟳");
 
     private final JComboBox<String> targetBox =
             new JComboBox<>(new String[]{"Orc", "Boss", "All"});
 
-    private final ToolVptProperties config;
+    private final JComboBox<WindowScanner.WindowInfo> windowBox =
+            new JComboBox<>();
+
     private final BotController controller;
+    private final ToolVptProperties config;
+    private final WindowScanner scanner;
 
-    private boolean running = false;
-    private OverlayFrame overlay;
+    public MainUI(BotController controller,
+                  ToolVptProperties config,
+                  WindowScanner scanner) {
 
-    // 🔥 giữ reference để stop
-    private Timer overlayTimer;
-
-    public MainUI(BotController controller, ToolVptProperties config) {
         this.controller = controller;
         this.config = config;
+        this.scanner = scanner;
 
         initUI();
+        loadWindows();
         bindEvents();
     }
 
-    // ================= INIT =================
+    // ================= UI =================
 
     private void initUI() {
-        setTitle("Tool Auto VPT");
-        setSize(420, 280);
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
+
+        setTitle("🔥 Tool Auto VPT");
+        setSize(520, 340);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout());
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
 
-        statusLabel.setFont(new Font("Arial", Font.BOLD, 18));
-        add(statusLabel, BorderLayout.NORTH);
+        JPanel root = new JPanel(new BorderLayout(16, 16));
+        root.setBorder(new EmptyBorder(16, 16, 16, 16));
+        root.setBackground(Color.WHITE);
+        setContentPane(root);
 
-        JPanel centerPanel = new JPanel(new GridLayout(3, 1));
+        // ===== STATUS =====
+        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        statusLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        statusLabel.setOpaque(true);
+        statusLabel.setBackground(new Color(244, 67, 54));
+        statusLabel.setForeground(Color.WHITE);
+        statusLabel.setBorder(new EmptyBorder(10, 0, 10, 0));
 
-        JPanel targetPanel = new JPanel();
-        targetPanel.add(new JLabel("Target:"));
-        targetPanel.add(targetBox);
+        root.add(statusLabel, BorderLayout.NORTH);
 
-        JLabel hotkeyLabel = new JLabel("Hotkey: F6 Start/Stop", SwingConstants.CENTER);
+        // ===== CENTER =====
+        JPanel center = new JPanel();
+        center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
+        center.setBackground(Color.WHITE);
 
-        centerPanel.add(targetPanel);
-        centerPanel.add(hotkeyLabel);
-        centerPanel.add(overlayBtn);
+        center.add(createField("🎯 Target", targetBox));
+        center.add(Box.createVerticalStrut(12));
+        center.add(createField("🪟 Window", createWindowPanel()));
+        center.add(Box.createVerticalStrut(12));
+        center.add(createField("📌 Selected", selectedWindowLabel));
 
-        add(centerPanel, BorderLayout.CENTER);
+        root.add(center, BorderLayout.CENTER);
 
-        JPanel panel = new JPanel();
-        panel.add(startBtn);
-        panel.add(stopBtn);
+        // ===== BUTTON =====
+        JPanel bottom = new JPanel(new GridLayout(1, 2, 12, 0));
+        bottom.setBackground(Color.WHITE);
 
-        add(panel, BorderLayout.SOUTH);
+        styleButton(startBtn, new Color(76, 175, 80));
+        styleButton(stopBtn, new Color(244, 67, 54));
 
         stopBtn.setEnabled(false);
+
+        bottom.add(startBtn);
+        bottom.add(stopBtn);
+
+        root.add(bottom, BorderLayout.SOUTH);
+    }
+
+    private JPanel createField(String labelText, JComponent comp) {
+
+        JPanel panel = new JPanel(new BorderLayout(6, 6));
+        panel.setBorder(new EmptyBorder(8, 8, 8, 8));
+        panel.setBackground(new Color(250, 250, 250));
+
+        JLabel label = new JLabel(labelText);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        label.setForeground(new Color(60, 60, 60));
+
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(comp, BorderLayout.CENTER);
+
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(220, 220, 220), 1, true),
+                new EmptyBorder(8, 8, 8, 8)
+        ));
+
+        return panel;
+    }
+
+    private JPanel createWindowPanel() {
+
+        JPanel panel = new JPanel(new BorderLayout(8, 0));
+        panel.setOpaque(false);
+
+        styleCombo(windowBox);
+
+        refreshBtn.setFocusPainted(false);
+        refreshBtn.setBackground(new Color(33, 150, 243));
+        refreshBtn.setForeground(Color.WHITE);
+        refreshBtn.setPreferredSize(new Dimension(40, 30));
+
+        panel.add(windowBox, BorderLayout.CENTER);
+        panel.add(refreshBtn, BorderLayout.EAST);
+
+        return panel;
+    }
+
+    // 🔥 combo xịn hơn
+    private void styleCombo(JComboBox<?> box) {
+
+        box.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        box.setBackground(Color.WHITE);
+
+        box.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(
+                    JList<?> list, Object value, int index,
+                    boolean isSelected, boolean cellHasFocus) {
+
+                JLabel label = (JLabel) super.getListCellRendererComponent(
+                        list, value, index, isSelected, cellHasFocus
+                );
+
+                label.setBorder(new EmptyBorder(5, 10, 5, 10));
+
+                if (value != null) {
+                    label.setText("🪟 " + value.toString());
+                }
+
+                if (isSelected) {
+                    label.setBackground(new Color(33, 150, 243));
+                    label.setForeground(Color.WHITE);
+                } else {
+                    label.setBackground(Color.WHITE);
+                    label.setForeground(new Color(40, 40, 40));
+                }
+
+                return label;
+            }
+        });
+    }
+
+    private void styleButton(JButton btn, Color color) {
+        btn.setFocusPainted(false);
+        btn.setBackground(color);
+        btn.setForeground(Color.WHITE);
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+    }
+
+    // ================= LOGIC =================
+
+    private void loadWindows() {
+        windowBox.removeAllItems();
+        for (var w : scanner.listWindows()) {
+            windowBox.addItem(w);
+        }
     }
 
     private void bindEvents() {
 
+        refreshBtn.addActionListener(e -> loadWindows());
+
         startBtn.addActionListener(e -> start());
         stopBtn.addActionListener(e -> stop());
 
-        overlayBtn.addActionListener(e -> toggleOverlay());
-
-        // 🔥 hotkey
-        KeyboardFocusManager.getCurrentKeyboardFocusManager()
-                .addKeyEventDispatcher(e -> {
-                    if (e.getID() == KeyEvent.KEY_PRESSED &&
-                            e.getKeyCode() == KeyEvent.VK_F6) {
-
-                        SwingUtilities.invokeLater(this::toggle);
-                        return true;
-                    }
-                    return false;
-                });
-
-        // 🔥 target change
-        targetBox.addActionListener(e -> {
-            String selected = (String) targetBox.getSelectedItem();
-            controller.setTarget(selected);
-        });
-    }
-
-    // ================= OVERLAY =================
-
-    private void toggleOverlay() {
-
-        if (overlay == null) {
-            showOverlay();
-        } else {
-            hideOverlay();
-        }
-    }
-
-    private void showOverlay() {
-
-        overlay = new OverlayFrame(
-                config.getWindowX(),
-                config.getWindowY(),
-                config.getRegionWidth(),
-                config.getRegionHeight()
+        targetBox.addActionListener(e ->
+                controller.setTarget((String) targetBox.getSelectedItem())
         );
 
-        overlay.setVisible(true);
-        overlayBtn.setText("Hide Overlay");
-
-        // sync lần đầu
-        controller.updateRegion(overlay.getBounds());
-
-        // 🔥 timer có kiểm soát
-        overlayTimer = new Timer(200, e -> {
-            if (overlay != null) {
-                controller.updateRegion(overlay.getBounds());
-            }
-        });
-
-        overlayTimer.start();
+        windowBox.addActionListener(e -> selectWindow());
     }
 
-    private void hideOverlay() {
+    private void selectWindow() {
+        var selected = (WindowScanner.WindowInfo) windowBox.getSelectedItem();
+        if (selected == null) return;
 
-        if (overlayTimer != null) {
-            overlayTimer.stop();
-            overlayTimer = null;
-        }
+        Rectangle rect = scanner.getRectangle(selected.getHwnd());
 
-        if (overlay != null) {
-            overlay.dispose();
-            overlay = null;
-        }
+        config.setWindowX(rect.x);
+        config.setWindowY(rect.y);
+        config.setWindowWidth(rect.width);
+        config.setWindowHeight(rect.height);
 
-        overlayBtn.setText("Show Overlay");
+        scanner.focus(selected.getHwnd());
+
+        selectedWindowLabel.setText("✅ " + selected.getTitle());
     }
-
-    // ================= CONTROL =================
 
     private void start() {
-        System.out.println("Starting...");
-        controller.start();
-        running = true;
 
-        statusLabel.setText("Running...");
+        if (config.getWindowWidth() <= 0) {
+            JOptionPane.showMessageDialog(this, "Select window first!");
+            return;
+        }
+
+        controller.start();
+
+        statusLabel.setText("RUNNING");
+        statusLabel.setBackground(new Color(76, 175, 80));
+
         startBtn.setEnabled(false);
         stopBtn.setEnabled(true);
     }
 
     private void stop() {
         controller.stop();
-        running = false;
 
-        statusLabel.setText("Stopped");
+        statusLabel.setText("STOP");
+        statusLabel.setBackground(new Color(244, 67, 54));
+
         startBtn.setEnabled(true);
         stopBtn.setEnabled(false);
-    }
-
-    private void toggle() {
-        if (running) stop();
-        else start();
     }
 }

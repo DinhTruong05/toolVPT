@@ -31,7 +31,7 @@ public class WindowScanner {
 
         @Override
         public String toString() {
-            return "WindowInfo{title='" + title + "'}";
+            return title; // 🔥 chỉ hiển thị title thôi
         }
     }
 
