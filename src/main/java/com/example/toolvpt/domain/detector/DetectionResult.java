@@ -1,24 +1,27 @@
 package com.example.toolvpt.domain.detector;
 
-import com.example.toolvpt.domain.decision.GameState;
-
-/**
- * Kết quả detect trạng thái game
- */
 public class DetectionResult {
-
     private final GameState state;
 
+    public DetectionResult(String state) {
+        GameState parsed;
+        try {
+            parsed = state == null ? GameState.UNKNOWN : GameState.valueOf(state);
+        } catch (Exception ignored) {
+            parsed = GameState.UNKNOWN;
+        }
+        this.state = parsed;
+    }
+
     public DetectionResult(GameState state) {
-        this.state = state;
+        this.state = state == null ? GameState.UNKNOWN : state;
     }
 
-    public GameState getState() {
+    public String getState() {
+        return state.name();
+    }
+
+    public GameState getGameState() {
         return state;
-    }
-
-    @Override
-    public String toString() {
-        return "DetectionResult{state=" + state + '}';
     }
 }

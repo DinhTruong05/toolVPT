@@ -45,7 +45,6 @@ public class BattleStateDetector {
     public DetectionResult detect() {
         BufferedImage screen = screenService.capture();
 
-        // ⚠️ crop vùng quan trọng (fix theo game bạn)
         int regionX = config.getDetectRegionX() > 0 ? config.getDetectRegionX() : 500;
         int regionY = config.getDetectRegionY() > 0 ? config.getDetectRegionY() : 300;
         int regionW = config.getDetectRegionWidth() > 0 ? config.getDetectRegionWidth() : 200;
@@ -57,7 +56,7 @@ public class BattleStateDetector {
         int h = Math.min(regionH, screen.getHeight() - startY);
 
         if (w <= 0 || h <= 0) {
-            return new DetectionResult("UNKNOWN");
+            return new DetectionResult(GameState.UNKNOWN);
         }
 
         BufferedImage region = screen.getSubimage(startX, startY, w, h);
@@ -65,9 +64,9 @@ public class BattleStateDetector {
         double fightScore = ImageUtils.compare(region, fightingSample);
         double idleScore = ImageUtils.compare(region, idleSample);
 
-        if (fightScore > 0.8) return new DetectionResult("FIGHTING");
-        if (idleScore > 0.8) return new DetectionResult("IDLE");
+        if (fightScore > 0.8) return new DetectionResult(GameState.FIGHTING);
+        if (idleScore > 0.8) return new DetectionResult(GameState.IDLE);
 
-        return new DetectionResult("UNKNOWN");
+        return new DetectionResult(GameState.UNKNOWN);
     }
 }

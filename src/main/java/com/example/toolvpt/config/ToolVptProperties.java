@@ -3,38 +3,41 @@ package com.example.toolvpt.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-
 @Component
 @ConfigurationProperties(prefix = "toolvpt")
 public class ToolVptProperties {
 
-    private int windowX;
-    private int windowY;
-    private int windowWidth;
-    private int windowHeight;
+    // ===== Window / Scan region =====
+    private int windowX = 150;
+    private int windowY = 50;
+    private int windowWidth = 1496;
+    private int windowHeight = 936;
 
-    private int regionWidth;
-    private int regionHeight;
+    private int regionWidth = 1100;
+    private int regionHeight = 700;
 
-    private double maxAcceptableDistance;
+    // ===== Target select =====
+    private double maxAcceptableDistance = 80.0;
+    private double minDistanceGap = 10.0;
+    private int scanRadius = 300;
 
-    private boolean debugSaveImage;
-    private String debugImagePath;
+    // ===== Debug =====
+    private boolean debugSaveImage = false;
+    private String debugImagePath = "debug.png";
 
-    private double minDistanceGap;
+    // ===== Loop =====
+    private long captureIntervalMs = 300;
 
-    private long captureIntervalMs;
+    // ===== Detector region =====
+    private int detectRegionX = 500;
+    private int detectRegionY = 300;
+    private int detectRegionWidth = 200;
+    private int detectRegionHeight = 100;
 
-    private int detectRegionX;
-    private int detectRegionY;
-    private int detectRegionWidth;
-    private int detectRegionHeight;
-
-    private double matcherAcceptScore;
-    private int matcherStep;
-    private int matcherMaxResults;
-
-    // ===== GETTER & SETTER =====
+    // ===== Matcher tuning =====
+    private double matcherAcceptScore = 30.0;
+    private int matcherStep = 2;
+    private int matcherMaxResults = 10;
 
     public int getWindowX() {
         return windowX;
@@ -92,7 +95,7 @@ public class ToolVptProperties {
         this.maxAcceptableDistance = maxAcceptableDistance;
     }
 
-    public boolean isDebugSaveImage() { // ✅ chuẩn Java Bean
+    public boolean isDebugSaveImage() {
         return debugSaveImage;
     }
 
@@ -114,6 +117,14 @@ public class ToolVptProperties {
 
     public void setMinDistanceGap(double minDistanceGap) {
         this.minDistanceGap = minDistanceGap;
+    }
+
+    public int getScanRadius() {
+        return scanRadius;
+    }
+
+    public void setScanRadius(int scanRadius) {
+        this.scanRadius = scanRadius;
     }
 
     public long getCaptureIntervalMs() {

@@ -1,4 +1,4 @@
-package com.example.toolvpt.domain.decision;
+package com.example.toolvpt.domain.detector;
 
 public enum GameState {
     IDLE,

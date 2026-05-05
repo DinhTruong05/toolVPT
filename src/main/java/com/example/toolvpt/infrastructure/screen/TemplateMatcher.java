@@ -25,7 +25,6 @@ public class TemplateMatcher {
     }
 
     public Point findBestMatch(BufferedImage screen, BufferedImage template) {
-
         int sw = screen.getWidth();
         int sh = screen.getHeight();
 
@@ -39,9 +38,7 @@ public class TemplateMatcher {
 
         for (int y = 0; y <= sh - th; y += step) {
             for (int x = 0; x <= sw - tw; x += step) {
-
                 double score = matchScore(screen, template, x, y, bestScore);
-
                 if (score < bestScore) {
                     bestScore = score;
                     bestPoint = new Point(x + tw / 2, y + th / 2);
@@ -73,7 +70,6 @@ public class TemplateMatcher {
         for (int y = 0; y <= sh - th; y += step) {
             for (int x = 0; x <= sw - tw; x += step) {
                 double score = matchScore(screen, template, x, y, acceptScore);
-
                 if (score <= acceptScore) {
                     candidates.add(new ScoredPoint(new Point(x + tw / 2, y + th / 2), score));
                 }
@@ -89,34 +85,27 @@ public class TemplateMatcher {
             boolean tooClose = results.stream().anyMatch(p -> p.distance(candidate.point()) < minCenterDistance);
             if (!tooClose) {
                 results.add(candidate.point());
-                if (results.size() >= maxResults) {
-                    break;
-                }
+                if (results.size() >= maxResults) break;
             }
         }
 
         return results;
     }
 
-    private record ScoredPoint(Point point, double score) {
-    }
+    private record ScoredPoint(Point point, double score) {}
 
-    private double matchScore(BufferedImage screen, BufferedImage template,
-                              int startX, int startY, double currentBest) {
-
+    private double matchScore(BufferedImage screen, BufferedImage template, int startX, int startY, double currentBest) {
         long totalDiff = 0;
         int count = 0;
 
         for (int y = 0; y < template.getHeight(); y += 2) {
             for (int x = 0; x < template.getWidth(); x += 2) {
-
                 int rgb1 = screen.getRGB(startX + x, startY + y);
                 int rgb2 = template.getRGB(x, y);
 
                 totalDiff += colorDiff(rgb1, rgb2);
                 count++;
 
-                // 🔥 early stop nếu đã tệ hơn best hiện tại
                 if (totalDiff / (double) count > currentBest) {
                     return Double.MAX_VALUE;
                 }

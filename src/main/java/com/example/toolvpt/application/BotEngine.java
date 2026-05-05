@@ -55,6 +55,7 @@ public class BotEngine {
 
     // ================= LOOP =================
 
+    // ...
     private void loop() {
         System.out.println("✅ Bot loop started");
 
@@ -62,9 +63,9 @@ public class BotEngine {
             try {
                 var result = service.detect();
 
-                BotAction action = decision.decide(result.getState());
+                BotAction action = decision.decide(result.getGameState());
 
-                System.out.println("State: " + result.getState() + " | Action: " + action);
+                System.out.println("State: " + result.getGameState() + " | Action: " + action);
 
                 execute(action);
 
@@ -81,6 +82,7 @@ public class BotEngine {
         running = false;
         System.out.println("🛑 Bot loop stopped");
     }
+// ...
 
     // ================= ACTION =================
 
