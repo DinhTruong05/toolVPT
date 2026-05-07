@@ -12,6 +12,7 @@ public class MainUI extends JFrame {
 
     private final JLabel statusLabel = new JLabel("STOP");
     private final JLabel selectedWindowLabel = new JLabel("No window selected");
+    private final JLabel hotkeyLabel = new JLabel("F8 to stop");
 
     private final JButton startBtn = new JButton("Start");
     private final JButton stopBtn = new JButton("Stop");
@@ -26,6 +27,7 @@ public class MainUI extends JFrame {
     private final BotController controller;
     private final ToolVptProperties config;
     private final WindowScanner scanner;
+    private final Timer statusSyncTimer;
 
     public MainUI(BotController controller,
                   ToolVptProperties config,
@@ -38,6 +40,9 @@ public class MainUI extends JFrame {
         initUI();
         loadWindows();
         bindEvents();
+
+        statusSyncTimer = new Timer(300, e -> syncStatus());
+        statusSyncTimer.start();
     }
 
     // ================= UI =================
@@ -74,6 +79,8 @@ public class MainUI extends JFrame {
         center.add(createField("🪟 Window", createWindowPanel()));
         center.add(Box.createVerticalStrut(12));
         center.add(createField("📌 Selected", selectedWindowLabel));
+        center.add(Box.createVerticalStrut(12));
+        center.add(createField("⌨️ Hotkey", hotkeyLabel));
 
         root.add(center, BorderLayout.CENTER);
 
@@ -194,6 +201,26 @@ public class MainUI extends JFrame {
         );
 
         windowBox.addActionListener(e -> selectWindow());
+
+        bindStopShortcuts();
+    }
+
+    private void bindStopShortcuts() {
+        JRootPane rootPane = getRootPane();
+        InputMap inputMap = rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = rootPane.getActionMap();
+
+        inputMap.put(KeyStroke.getKeyStroke("F8"), "stopBot");
+        inputMap.put(KeyStroke.getKeyStroke("ESCAPE"), "stopBot");
+
+        actionMap.put("stopBot", new AbstractAction() {
+            @Override
+            public void actionPerformed(java.awt.event.ActionEvent e) {
+                if (controller.isRunning()) {
+                    stop();
+                }
+            }
+        });
     }
 
     private void selectWindow() {
@@ -220,21 +247,28 @@ public class MainUI extends JFrame {
         }
 
         controller.start();
-
-        statusLabel.setText("RUNNING");
-        statusLabel.setBackground(new Color(76, 175, 80));
-
-        startBtn.setEnabled(false);
-        stopBtn.setEnabled(true);
+        updateRunningState(true);
     }
 
     private void stop() {
         controller.stop();
+        updateRunningState(false);
+    }
 
-        statusLabel.setText("STOP");
-        statusLabel.setBackground(new Color(244, 67, 54));
+    private void syncStatus() {
+        updateRunningState(controller.isRunning());
+    }
 
-        startBtn.setEnabled(true);
-        stopBtn.setEnabled(false);
+    private void updateRunningState(boolean running) {
+        if (running) {
+            statusLabel.setText("RUNNING");
+            statusLabel.setBackground(new Color(76, 175, 80));
+        } else {
+            statusLabel.setText("STOP");
+            statusLabel.setBackground(new Color(244, 67, 54));
+        }
+
+        startBtn.setEnabled(!running);
+        stopBtn.setEnabled(running);
     }
 }

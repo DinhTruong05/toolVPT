@@ -47,8 +47,8 @@ public class BattleStateDetector {
 
         int regionX = config.getDetectRegionX() > 0 ? config.getDetectRegionX() : 500;
         int regionY = config.getDetectRegionY() > 0 ? config.getDetectRegionY() : 300;
-        int regionW = config.getDetectRegionWidth() > 0 ? config.getDetectRegionWidth() : 200;
-        int regionH = config.getDetectRegionHeight() > 0 ? config.getDetectRegionHeight() : 100;
+        int regionW = config.getDetectRegionWidth() > 0 ? config.getDetectRegionWidth() : idleSample.getWidth();
+        int regionH = config.getDetectRegionHeight() > 0 ? config.getDetectRegionHeight() : idleSample.getHeight();
 
         int startX = Math.max(0, Math.min(regionX, screen.getWidth() - 1));
         int startY = Math.max(0, Math.min(regionY, screen.getHeight() - 1));
@@ -64,8 +64,31 @@ public class BattleStateDetector {
         double fightScore = ImageUtils.compare(region, fightingSample);
         double idleScore = ImageUtils.compare(region, idleSample);
 
-        if (fightScore > 0.8) return new DetectionResult(GameState.FIGHTING);
-        if (idleScore > 0.8) return new DetectionResult(GameState.IDLE);
+        System.out.printf(
+                "🧠 Detect region=%d,%d %dx%d | fight=%.3f idle=%.3f%n",
+                startX,
+                startY,
+                w,
+                h,
+                fightScore,
+                idleScore
+        );
+
+        double fightThreshold = config.getDetectFightThreshold() > 0 ? config.getDetectFightThreshold() : 0.72;
+        double idleThreshold = config.getDetectIdleThreshold() > 0 ? config.getDetectIdleThreshold() : 0.68;
+        double minConfidence = config.getDetectMinConfidence() > 0 ? config.getDetectMinConfidence() : 0.55;
+
+        if (fightScore >= fightThreshold) {
+            return new DetectionResult(GameState.FIGHTING);
+        }
+        if (idleScore >= idleThreshold) {
+            return new DetectionResult(GameState.IDLE);
+        }
+
+        // fallback: giảm UNKNOWN nếu một mẫu vượt mức tự tin tối thiểu
+        if (Math.max(fightScore, idleScore) >= minConfidence) {
+            return new DetectionResult(idleScore >= fightScore ? GameState.IDLE : GameState.FIGHTING);
+        }
 
         return new DetectionResult(GameState.UNKNOWN);
     }

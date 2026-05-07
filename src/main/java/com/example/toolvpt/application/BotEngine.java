@@ -17,6 +17,12 @@ import java.util.List;
 @Component
 public class BotEngine {
 
+    private static final String TARGET_ORC = "Orc";
+    private static final String TARGET_BOSS = "Boss";
+    private static final long CLICK_COOLDOWN_MS = 1200;
+    private static final int EXPLORE_CLICK_RADIUS = 140;
+    private static final int NO_TARGET_EXPLORE_THRESHOLD = 4;
+
     private final ToolService service;
     private final ToolVptProperties config;
     private final InputController input;
@@ -25,13 +31,12 @@ public class BotEngine {
     private final DecisionEngine decision;
 
     private volatile boolean running = false;
-    private volatile String currentTarget = "Orc";
+    private volatile String currentTarget = TARGET_ORC;
+    private volatile Rectangle dynamicRegion;
 
     private Thread botThread;
     private long lastClickTime = 0;
-
-    // vùng scan dynamic (overlay)
-    private volatile Rectangle dynamicRegion;
+    private int noTargetStreak = 0;
 
     public BotEngine(
             ToolService service,
@@ -45,32 +50,21 @@ public class BotEngine {
         this.input = input;
         this.screenService = screenService;
         this.decision = new DecisionEngine();
-
-        // load template 1 lần
-        List<BufferedImage> templates = loadTemplates();
-
-        // inject đúng dependency
-        this.targetFinder = new TargetFinder(matcher, templates, config);
+        this.targetFinder = new TargetFinder(matcher, loadTemplates(), config);
     }
 
-    // ================= LOOP =================
-
-    // ...
     private void loop() {
         System.out.println("✅ Bot loop started");
 
         while (running) {
             try {
                 var result = service.detect();
-
                 BotAction action = decision.decide(result.getGameState());
 
                 System.out.println("State: " + result.getGameState() + " | Action: " + action);
-
                 execute(action);
 
                 Thread.sleep(config.getCaptureIntervalMs());
-
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
@@ -82,9 +76,6 @@ public class BotEngine {
         running = false;
         System.out.println("🛑 Bot loop stopped");
     }
-// ...
-
-    // ================= ACTION =================
 
     private void execute(BotAction action) {
         switch (action) {
@@ -103,59 +94,69 @@ public class BotEngine {
         }
     }
 
-    // ================= TARGET =================
-
     private void searchAndClick() {
         try {
             Rectangle region = getScanRegion();
-
-            // capture đúng vùng
             BufferedImage screen = screenService.capture(region);
 
-            Point target;
+            Point target = switch (currentTarget) {
+                case TARGET_ORC -> targetFinder.findOnly(screen, 0);
+                case TARGET_BOSS -> targetFinder.findOnly(screen, 1);
+                default -> targetFinder.findNearest(screen);
+            };
+
             boolean fallbackUsed = false;
-
-            switch (currentTarget) {
-                case "Orc" -> target = targetFinder.findOnly(screen, 0);
-                case "Boss" -> target = targetFinder.findOnly(screen, 1);
-                default -> target = targetFinder.findNearest(screen);
-            }
-
-            // fallback: nếu target được chọn không thấy thì thử toàn bộ template
-            if (target == null && ("Orc".equals(currentTarget) || "Boss".equals(currentTarget))) {
+            if (target == null && (TARGET_ORC.equals(currentTarget) || TARGET_BOSS.equals(currentTarget))) {
                 target = targetFinder.findNearest(screen);
                 fallbackUsed = target != null;
             }
 
             long now = System.currentTimeMillis();
-
-            if (target != null && now - lastClickTime > 1200) {
-
+            if (target != null && now - lastClickTime > CLICK_COOLDOWN_MS) {
                 int clickX = target.x + region.x;
                 int clickY = target.y + region.y;
 
                 input.click(clickX, clickY);
                 lastClickTime = now;
+                noTargetStreak = 0;
 
                 System.out.println("🎯 Click: " + clickX + "," + clickY);
                 if (fallbackUsed) {
                     System.out.println("↪️ Fallback target used (nearest available)");
                 }
-
             } else if (target == null) {
-                System.out.println("❌ No target found");
-            }
+                noTargetStreak++;
+                System.out.println("❌ No target found (streak=" + noTargetStreak + ")");
 
+                if (noTargetStreak >= NO_TARGET_EXPLORE_THRESHOLD && now - lastClickTime > CLICK_COOLDOWN_MS) {
+                    clickExplorePoint(region);
+                    lastClickTime = now;
+                    noTargetStreak = 0;
+                }
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void clickExplorePoint(Rectangle region) {
+        int centerX = region.x + region.width / 2;
+        int centerY = region.y + region.height / 2;
+
+        int offsetX = (int) (Math.random() * (EXPLORE_CLICK_RADIUS * 2 + 1)) - EXPLORE_CLICK_RADIUS;
+        int offsetY = (int) (Math.random() * (EXPLORE_CLICK_RADIUS * 2 + 1)) - EXPLORE_CLICK_RADIUS;
+
+        int clickX = Math.max(region.x, Math.min(region.x + region.width - 1, centerX + offsetX));
+        int clickY = Math.max(region.y, Math.min(region.y + region.height - 1, centerY + offsetY));
+
+        input.click(clickX, clickY);
+        System.out.println("🧭 Explore click: " + clickX + "," + clickY);
     }
 
     private Rectangle getScanRegion() {
         if (dynamicRegion != null) {
             return dynamicRegion;
         }
-
         return new Rectangle(
                 config.getWindowX(),
                 config.getWindowY(),
@@ -164,13 +165,12 @@ public class BotEngine {
         );
     }
 
-    // ================= CONTROL =================
-
     public synchronized void start() {
-        if (running) return;
+        if (running) {
+            return;
+        }
 
         running = true;
-
         botThread = new Thread(this::loop, "toolvpt-bot-thread");
         botThread.start();
 
@@ -193,20 +193,22 @@ public class BotEngine {
     }
 
     public void setTarget(String target) {
-        if (target != null) {
-            this.currentTarget = target;
-            System.out.println("🎯 Set target: " + target);
+        if (target == null || target.isBlank()) {
+            return;
         }
+
+        this.currentTarget = target.trim();
+        System.out.println("🎯 Set target: " + this.currentTarget);
     }
 
     public void updateRegion(Rectangle rect) {
-        if (rect != null) {
-            this.dynamicRegion = new Rectangle(rect);
-            System.out.println("📐 Updated scan region: " + rect);
+        if (rect == null) {
+            return;
         }
-    }
 
-    // ================= LOAD TEMPLATE =================
+        this.dynamicRegion = new Rectangle(rect);
+        System.out.println("📐 Updated scan region: " + rect);
+    }
 
     private List<BufferedImage> loadTemplates() {
         try {
@@ -220,12 +222,17 @@ public class BotEngine {
     }
 
     private BufferedImage loadImage(String path) throws Exception {
-        InputStream is = getClass().getClassLoader().getResourceAsStream(path);
+        try (InputStream is = getClass().getClassLoader().getResourceAsStream(path)) {
+            if (is == null) {
+                throw new RuntimeException("❌ Missing file: " + path);
+            }
 
-        if (is == null) {
-            throw new RuntimeException("❌ Missing file: " + path);
+            BufferedImage image = ImageIO.read(is);
+            if (image == null) {
+                throw new RuntimeException("❌ Cannot decode image: " + path);
+            }
+
+            return image;
         }
-
-        return ImageIO.read(is);
     }
 }

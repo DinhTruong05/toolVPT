@@ -34,6 +34,11 @@ public class ToolVptProperties {
     private int detectRegionWidth = 200;
     private int detectRegionHeight = 100;
 
+    // ===== Detector threshold =====
+    private double detectFightThreshold = 0.80;
+    private double detectIdleThreshold = 0.72;
+    private double detectMinConfidence = 0.60;
+
     // ===== Matcher tuning =====
     private double matcherAcceptScore = 30.0;
     private int matcherStep = 2;
@@ -165,6 +170,30 @@ public class ToolVptProperties {
 
     public void setDetectRegionHeight(int detectRegionHeight) {
         this.detectRegionHeight = detectRegionHeight;
+    }
+
+    public double getDetectFightThreshold() {
+        return detectFightThreshold;
+    }
+
+    public void setDetectFightThreshold(double detectFightThreshold) {
+        this.detectFightThreshold = detectFightThreshold;
+    }
+
+    public double getDetectIdleThreshold() {
+        return detectIdleThreshold;
+    }
+
+    public void setDetectIdleThreshold(double detectIdleThreshold) {
+        this.detectIdleThreshold = detectIdleThreshold;
+    }
+
+    public double getDetectMinConfidence() {
+        return detectMinConfidence;
+    }
+
+    public void setDetectMinConfidence(double detectMinConfidence) {
+        this.detectMinConfidence = detectMinConfidence;
     }
 
     public double getMatcherAcceptScore() {

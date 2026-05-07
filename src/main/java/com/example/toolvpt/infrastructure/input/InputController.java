@@ -1,5 +1,15 @@
 package com.example.toolvpt.infrastructure.input;
 
+import com.example.toolvpt.application.BotController;
+import com.sun.jna.Native;
+import com.sun.jna.platform.win32.Kernel32;
+import com.sun.jna.platform.win32.User32;
+import com.sun.jna.platform.win32.WinDef;
+import com.sun.jna.platform.win32.WinUser;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.awt.*;
@@ -80,6 +90,93 @@ public class InputController {
         try {
             Thread.sleep(random(minMs, maxMs));
         } catch (InterruptedException ignored) {
+        }
+    }
+
+    @Component
+    public static class GlobalStopHotkeyService {
+
+        private static final Logger log = LoggerFactory.getLogger(GlobalStopHotkeyService.class);
+
+        private static final int HOTKEY_ID_STOP = 1001;
+        private static final int MOD_NOREPEAT = 0x4000;
+        private static final int VK_F8 = 0x77;
+
+        private final BotController controller;
+
+        private volatile boolean running = false;
+        private volatile int hotkeyThreadId = 0;
+        private Thread hotkeyThread;
+
+        public GlobalStopHotkeyService(BotController controller) {
+            this.controller = controller;
+        }
+
+        @PostConstruct
+        public void start() {
+            if (!isWindows()) {
+                log.warn("Global stop hotkey F8 is only supported on Windows");
+                return;
+            }
+
+            running = true;
+            hotkeyThread = new Thread(this::listenForHotkey, "toolvpt-global-stop-hotkey");
+            hotkeyThread.setDaemon(true);
+            hotkeyThread.start();
+        }
+
+        @PreDestroy
+        public void stop() {
+            running = false;
+
+            if (hotkeyThreadId != 0) {
+                User32.INSTANCE.PostThreadMessage(
+                        hotkeyThreadId,
+                        WinUser.WM_QUIT,
+                        new WinDef.WPARAM(0),
+                        new WinDef.LPARAM(0)
+                );
+            }
+        }
+
+        private void listenForHotkey() {
+            hotkeyThreadId = Kernel32.INSTANCE.GetCurrentThreadId();
+
+            boolean registered = User32.INSTANCE.RegisterHotKey(
+                    null,
+                    HOTKEY_ID_STOP,
+                    MOD_NOREPEAT,
+                    VK_F8
+            );
+
+            if (!registered) {
+                log.warn("Cannot register global stop hotkey F8. Win32 error={}", Native.getLastError());
+                return;
+            }
+
+            log.info("✅ Global stop hotkey registered: F8");
+
+            try {
+                WinUser.MSG msg = new WinUser.MSG();
+                while (running) {
+                    int result = User32.INSTANCE.GetMessage(msg, null, 0, 0);
+                    if (result <= 0) {
+                        break;
+                    }
+
+                    if (msg.message == WinUser.WM_HOTKEY && msg.wParam.intValue() == HOTKEY_ID_STOP) {
+                        controller.stop();
+                        log.info("🛑 Bot stopped by global hotkey F8");
+                    }
+                }
+            } finally {
+                User32.INSTANCE.UnregisterHotKey(null, HOTKEY_ID_STOP);
+                log.info("Global stop hotkey unregistered");
+            }
+        }
+
+        private boolean isWindows() {
+            return System.getProperty("os.name", "").toLowerCase().contains("win");
         }
     }
 }
