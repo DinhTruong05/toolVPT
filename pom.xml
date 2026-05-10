@@ -5,7 +5,7 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- 🔥 NÊN dùng Spring Boot 3 stable -->
+    <!-- Spring Boot Parent -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -16,23 +16,34 @@
     <groupId>com.example</groupId>
     <artifactId>toolVPT</artifactId>
     <version>0.0.1-SNAPSHOT</version>
+
     <name>toolVPT</name>
     <description>Tool auto game VPT</description>
 
     <properties>
-        <!-- 🔥 Java ổn định cho JNA -->
+
+        <!-- Java Version -->
         <java.version>17</java.version>
+
+        <!-- UTF-8 -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+
+        <!-- Maven Compiler -->
+        <maven.compiler.source>${java.version}</maven.compiler.source>
+        <maven.compiler.target>${java.version}</maven.compiler.target>
+
     </properties>
 
     <dependencies>
 
-        <!-- Spring core -->
+        <!-- Spring Boot -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
         </dependency>
 
-        <!-- 🔥 JNA: BẮT BUỘC để scan window -->
+        <!-- JNA -->
         <dependency>
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
@@ -45,6 +56,13 @@
             <version>5.14.0</version>
         </dependency>
 
+        <!-- FlatLaf -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.4</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -52,30 +70,24 @@
             <scope>test</scope>
         </dependency>
 
-        <dependency>
-            <groupId>com.formdev</groupId>
-            <artifactId>flatlaf</artifactId>
-            <version>3.4</version>
-        </dependency>
-
     </dependencies>
 
     <build>
         <plugins>
 
-            <!-- Spring Boot run/build -->
+            <!-- Spring Boot Plugin -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- 🔥 Compile chuẩn Java -->
+            <!-- Java Compiler -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+
                 <configuration>
-                    <source>${java.version}</source>
-                    <target>${java.version}</target>
+                    <release>${java.version}</release>
                 </configuration>
             </plugin>
 
