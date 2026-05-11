@@ -5,7 +5,9 @@ import org.springframework.stereotype.Component;
 
 import java.awt.Point;
 import java.awt.image.BufferedImage;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 @Component
 public class TemplateMatcher {
@@ -21,15 +23,26 @@ public class TemplateMatcher {
     }
 
     public Point find(BufferedImage screen, BufferedImage template) {
-        return findBestMatch(screen, template);
+        MatchResult result = findBestMatchResult(screen, template);
+        return result == null ? null : result.point();
     }
 
     public Point findBestMatch(BufferedImage screen, BufferedImage template) {
+        MatchResult result = findBestMatchResult(screen, template);
+        return result == null ? null : result.point();
+    }
+
+    public MatchResult findBestMatchResult(BufferedImage screen, BufferedImage template) {
         int sw = screen.getWidth();
         int sh = screen.getHeight();
 
         int tw = template.getWidth();
         int th = template.getHeight();
+        if (tw <= 0 || th <= 0 || tw > sw || th > sh) {
+            System.out.println("❌ Invalid template size: " + tw + "x" + th + " for screen " + sw + "x" + sh);
+            return null;
+        }
+
         int step = Math.max(1, config.getMatcherStep() > 0 ? config.getMatcherStep() : DEFAULT_STEP);
         double acceptScore = config.getMatcherAcceptScore() > 0 ? config.getMatcherAcceptScore() : DEFAULT_ACCEPT_SCORE;
 
@@ -48,7 +61,7 @@ public class TemplateMatcher {
 
         if (bestScore <= acceptScore) {
             System.out.println("✅ Match OK: score=" + bestScore);
-            return bestPoint;
+            return new MatchResult(bestPoint, bestScore, tw, th);
         }
 
         System.out.println("❌ No match. Best=" + bestScore);
@@ -56,43 +69,53 @@ public class TemplateMatcher {
     }
 
     public List<Point> findPoints(BufferedImage screen, BufferedImage template) {
+        return findScoredPoints(screen, template)
+                .stream()
+                .map(MatchResult::point)
+                .toList();
+    }
+
+    public List<MatchResult> findScoredPoints(BufferedImage screen, BufferedImage template) {
         int sw = screen.getWidth();
         int sh = screen.getHeight();
 
         int tw = template.getWidth();
         int th = template.getHeight();
+        if (tw <= 0 || th <= 0 || tw > sw || th > sh) {
+            System.out.println("❌ Invalid template size: " + tw + "x" + th + " for screen " + sw + "x" + sh);
+            return List.of();
+        }
+
         int step = Math.max(1, config.getMatcherStep() > 0 ? config.getMatcherStep() : DEFAULT_STEP);
         double acceptScore = config.getMatcherAcceptScore() > 0 ? config.getMatcherAcceptScore() : DEFAULT_ACCEPT_SCORE;
         int maxResults = config.getMatcherMaxResults() > 0 ? config.getMatcherMaxResults() : DEFAULT_MAX_RESULTS;
 
-        List<ScoredPoint> candidates = new ArrayList<>();
+        List<MatchResult> candidates = new ArrayList<>();
 
         for (int y = 0; y <= sh - th; y += step) {
             for (int x = 0; x <= sw - tw; x += step) {
                 double score = matchScore(screen, template, x, y, acceptScore);
                 if (score <= acceptScore) {
-                    candidates.add(new ScoredPoint(new Point(x + tw / 2, y + th / 2), score));
+                    candidates.add(new MatchResult(new Point(x + tw / 2, y + th / 2), score, tw, th));
                 }
             }
         }
 
-        candidates.sort(Comparator.comparingDouble(ScoredPoint::score));
+        candidates.sort(Comparator.comparingDouble(MatchResult::score));
 
-        List<Point> results = new ArrayList<>();
+        List<MatchResult> results = new ArrayList<>();
         double minCenterDistance = Math.max(6, Math.min(tw, th) / 4.0);
 
-        for (ScoredPoint candidate : candidates) {
-            boolean tooClose = results.stream().anyMatch(p -> p.distance(candidate.point()) < minCenterDistance);
+        for (MatchResult candidate : candidates) {
+            boolean tooClose = results.stream().anyMatch(p -> p.point().distance(candidate.point()) < minCenterDistance);
             if (!tooClose) {
-                results.add(candidate.point());
+                results.add(candidate);
                 if (results.size() >= maxResults) break;
             }
         }
 
         return results;
     }
-
-    private record ScoredPoint(Point point, double score) {}
 
     private double matchScore(BufferedImage screen, BufferedImage template, int startX, int startY, double currentBest) {
         long totalDiff = 0;
@@ -128,4 +151,6 @@ public class TemplateMatcher {
                 + Math.abs(g1 - g2)
                 + Math.abs(b1 - b2);
     }
+
+    public record MatchResult(Point point, double score, int templateWidth, int templateHeight) {}
 }

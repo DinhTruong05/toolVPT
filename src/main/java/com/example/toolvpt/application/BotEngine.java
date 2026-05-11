@@ -37,6 +37,8 @@ public class BotEngine {
     private Thread botThread;
     private long lastClickTime = 0;
     private int noTargetStreak = 0;
+    private Point lockedTarget;
+    private int stableTargetFrames = 0;
 
     public BotEngine(
             ToolService service,
@@ -96,7 +98,7 @@ public class BotEngine {
 
     private void searchAndClick() {
         try {
-            Rectangle region = getScanRegion();
+            Rectangle region = screenService.normalize(getScanRegion());
             BufferedImage screen = screenService.capture(region);
 
             Point target = switch (currentTarget) {
@@ -109,6 +111,13 @@ public class BotEngine {
             if (target == null && (TARGET_ORC.equals(currentTarget) || TARGET_BOSS.equals(currentTarget))) {
                 target = targetFinder.findNearest(screen);
                 fallbackUsed = target != null;
+            }
+
+            if (target != null) {
+                target = stabilizeTarget(target);
+                if (target == null) {
+                    return;
+                }
             }
 
             long now = System.currentTimeMillis();
@@ -125,6 +134,7 @@ public class BotEngine {
                     System.out.println("↪️ Fallback target used (nearest available)");
                 }
             } else if (target == null) {
+                resetTargetLock();
                 noTargetStreak++;
                 System.out.println("❌ No target found (streak=" + noTargetStreak + ")");
 
@@ -137,6 +147,42 @@ public class BotEngine {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private Point stabilizeTarget(Point detectedTarget) {
+        int requiredFrames = Math.max(1, config.getTargetStableFrames());
+        if (requiredFrames <= 1) {
+            lockedTarget = new Point(detectedTarget);
+            stableTargetFrames = 1;
+            return detectedTarget;
+        }
+
+        int lockRadius = Math.max(1, config.getTargetLockRadius());
+        if (lockedTarget == null || lockedTarget.distance(detectedTarget) > lockRadius) {
+            lockedTarget = new Point(detectedTarget);
+            stableTargetFrames = 1;
+            System.out.println("🔒 Target lock started: " + lockedTarget.x + "," + lockedTarget.y);
+            System.out.println("⏳ Waiting stable target: " + stableTargetFrames + "/" + requiredFrames);
+            return null;
+        }
+
+        lockedTarget = new Point(
+                (lockedTarget.x + detectedTarget.x) / 2,
+                (lockedTarget.y + detectedTarget.y) / 2
+        );
+        stableTargetFrames++;
+
+        if (stableTargetFrames < requiredFrames) {
+            System.out.println("⏳ Waiting stable target: " + stableTargetFrames + "/" + requiredFrames);
+            return null;
+        }
+
+        return new Point(lockedTarget);
+    }
+
+    private void resetTargetLock() {
+        lockedTarget = null;
+        stableTargetFrames = 0;
     }
 
     private void clickExplorePoint(Rectangle region) {
@@ -155,13 +201,17 @@ public class BotEngine {
 
     private Rectangle getScanRegion() {
         if (dynamicRegion != null) {
-            return dynamicRegion;
+            return new Rectangle(dynamicRegion);
         }
+
+        int width = Math.min(config.getRegionWidth(), config.getWindowWidth());
+        int height = Math.min(config.getRegionHeight(), config.getWindowHeight());
+
         return new Rectangle(
                 config.getWindowX(),
                 config.getWindowY(),
-                config.getRegionWidth(),
-                config.getRegionHeight()
+                Math.max(1, width),
+                Math.max(1, height)
         );
     }
 
@@ -170,6 +220,9 @@ public class BotEngine {
             return;
         }
 
+        noTargetStreak = 0;
+        lastClickTime = 0;
+        resetTargetLock();
         running = true;
         botThread = new Thread(this::loop, "toolvpt-bot-thread");
         botThread.start();
@@ -198,6 +251,8 @@ public class BotEngine {
         }
 
         this.currentTarget = target.trim();
+        this.noTargetStreak = 0;
+        resetTargetLock();
         System.out.println("🎯 Set target: " + this.currentTarget);
     }
 
@@ -207,6 +262,8 @@ public class BotEngine {
         }
 
         this.dynamicRegion = new Rectangle(rect);
+        this.noTargetStreak = 0;
+        resetTargetLock();
         System.out.println("📐 Updated scan region: " + rect);
     }
 

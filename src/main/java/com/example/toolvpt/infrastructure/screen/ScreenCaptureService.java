@@ -35,7 +35,14 @@ public class ScreenCaptureService {
      * Capture vùng custom
      */
     public BufferedImage capture(Rectangle area) {
-        return robot.createScreenCapture(safeRect(area));
+        return robot.createScreenCapture(normalize(area));
+    }
+
+    /**
+     * Chuẩn hóa vùng capture để caller dùng đúng tọa độ thực tế sau khi clamp vào màn hình.
+     */
+    public Rectangle normalize(Rectangle area) {
+        return safeRect(area);
     }
 
     /**
@@ -50,6 +57,9 @@ public class ScreenCaptureService {
     // ================= SAFE =================
 
     private Rectangle safeRect(Rectangle r) {
+        if (r == null) {
+            throw new RuntimeException("❌ Invalid capture area");
+        }
         return safeRect(r.x, r.y, r.width, r.height);
     }
 
@@ -57,19 +67,17 @@ public class ScreenCaptureService {
 
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
 
-        if (w <= 0 || h <= 0) {
+        if (screen.width <= 0 || screen.height <= 0 || w <= 0 || h <= 0) {
             throw new RuntimeException("❌ Invalid capture size");
         }
 
-        if (x < 0) x = 0;
-        if (y < 0) y = 0;
+        x = Math.max(0, Math.min(x, screen.width - 1));
+        y = Math.max(0, Math.min(y, screen.height - 1));
+        w = Math.min(w, screen.width - x);
+        h = Math.min(h, screen.height - y);
 
-        if (x + w > screen.width) {
-            w = screen.width - x;
-        }
-
-        if (y + h > screen.height) {
-            h = screen.height - y;
+        if (w <= 0 || h <= 0) {
+            throw new RuntimeException("❌ Capture area is outside screen");
         }
 
         return new Rectangle(x, y, w, h);

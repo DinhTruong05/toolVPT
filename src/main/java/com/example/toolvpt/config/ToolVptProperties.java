@@ -17,9 +17,12 @@ public class ToolVptProperties {
     private int regionHeight = 700;
 
     // ===== Target select =====
-    private double maxAcceptableDistance = 80.0;
+    private double maxAcceptableDistance = 500.0;
     private double minDistanceGap = 10.0;
-    private int scanRadius = 300;
+    private int scanRadius = 500;
+    private double targetDistanceWeight = 0.05;
+    private int targetStableFrames = 2;
+    private int targetLockRadius = 45;
 
     // ===== Debug =====
     private boolean debugSaveImage = false;
@@ -97,7 +100,7 @@ public class ToolVptProperties {
     }
 
     public void setMaxAcceptableDistance(double maxAcceptableDistance) {
-        this.maxAcceptableDistance = maxAcceptableDistance;
+        this.maxAcceptableDistance = Math.max(0.0, maxAcceptableDistance);
     }
 
     public boolean isDebugSaveImage() {
@@ -129,7 +132,31 @@ public class ToolVptProperties {
     }
 
     public void setScanRadius(int scanRadius) {
-        this.scanRadius = scanRadius;
+        this.scanRadius = Math.max(0, scanRadius);
+    }
+
+    public double getTargetDistanceWeight() {
+        return targetDistanceWeight;
+    }
+
+    public void setTargetDistanceWeight(double targetDistanceWeight) {
+        this.targetDistanceWeight = Math.max(0.0, targetDistanceWeight);
+    }
+
+    public int getTargetStableFrames() {
+        return targetStableFrames;
+    }
+
+    public void setTargetStableFrames(int targetStableFrames) {
+        this.targetStableFrames = Math.max(1, targetStableFrames);
+    }
+
+    public int getTargetLockRadius() {
+        return targetLockRadius;
+    }
+
+    public void setTargetLockRadius(int targetLockRadius) {
+        this.targetLockRadius = Math.max(1, targetLockRadius);
     }
 
     public long getCaptureIntervalMs() {
@@ -209,7 +236,7 @@ public class ToolVptProperties {
     }
 
     public void setMatcherStep(int matcherStep) {
-        this.matcherStep = matcherStep;
+        this.matcherStep = Math.max(1, matcherStep);
     }
 
     public int getMatcherMaxResults() {
@@ -217,6 +244,6 @@ public class ToolVptProperties {
     }
 
     public void setMatcherMaxResults(int matcherMaxResults) {
-        this.matcherMaxResults = matcherMaxResults;
+        this.matcherMaxResults = Math.max(1, matcherMaxResults);
     }
 }
