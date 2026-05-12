@@ -5,10 +5,13 @@ import java.awt.image.BufferedImage;
 public class ImageUtils {
 
     private static final int STEP = 2;
+    private static final int MIN_ALPHA = 32;
 
     /**
      * So sánh 2 ảnh cùng kích thước hoặc khác kích thước.
      * Trả về 0 → 1, càng cao càng giống.
+     * Pixel trong ảnh mẫu có alpha thấp sẽ được bỏ qua để mẫu PNG trong suốt
+     * chỉ chấm điểm phần UI/target thật, không phạt nền xung quanh.
      */
     public static double compare(BufferedImage img1, BufferedImage img2) {
         if (img1.getWidth() == img2.getWidth() && img1.getHeight() == img2.getHeight()) {
@@ -36,9 +39,13 @@ public class ImageUtils {
 
             for (int x = 0; x < width; x += STEP) {
                 int sampleX = Math.min(img2.getWidth() - 1, x * img2.getWidth() / width);
+                int sampleRgb = img2.getRGB(sampleX, sampleY);
+                if (isTransparent(sampleRgb)) {
+                    continue;
+                }
 
                 int g1 = gray(img1.getRGB(x, y));
-                int g2 = gray(img2.getRGB(sampleX, sampleY));
+                int g2 = gray(sampleRgb);
 
                 diff += Math.abs(g1 - g2);
                 count++;
@@ -54,8 +61,13 @@ public class ImageUtils {
 
         for (int y = 0; y < img1.getHeight(); y += STEP) {
             for (int x = 0; x < img1.getWidth(); x += STEP) {
+                int sampleRgb = img2.getRGB(x, y);
+                if (isTransparent(sampleRgb)) {
+                    continue;
+                }
+
                 int g1 = gray(img1.getRGB(x, y));
-                int g2 = gray(img2.getRGB(x, y));
+                int g2 = gray(sampleRgb);
 
                 diff += Math.abs(g1 - g2);
                 count++;
@@ -73,6 +85,10 @@ public class ImageUtils {
         double maxDiff = 255.0 * count;
         double result = 1.0 - (diff / maxDiff);
         return Math.max(0.0, Math.min(1.0, result));
+    }
+
+    private static boolean isTransparent(int argb) {
+        return ((argb >>> 24) & 0xff) < MIN_ALPHA;
     }
 
     private static int gray(int rgb) {

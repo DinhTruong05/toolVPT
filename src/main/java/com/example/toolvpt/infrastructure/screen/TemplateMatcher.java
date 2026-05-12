@@ -15,6 +15,8 @@ public class TemplateMatcher {
     private static final double DEFAULT_ACCEPT_SCORE = 30.0;
     private static final int DEFAULT_STEP = 2;
     private static final int DEFAULT_MAX_RESULTS = 10;
+    private static final int TEMPLATE_PIXEL_STEP = 2;
+    private static final int MIN_ALPHA = 32;
 
     private final ToolVptProperties config;
 
@@ -121,21 +123,33 @@ public class TemplateMatcher {
         long totalDiff = 0;
         int count = 0;
 
-        for (int y = 0; y < template.getHeight(); y += 2) {
-            for (int x = 0; x < template.getWidth(); x += 2) {
-                int rgb1 = screen.getRGB(startX + x, startY + y);
-                int rgb2 = template.getRGB(x, y);
+        for (int y = 0; y < template.getHeight(); y += TEMPLATE_PIXEL_STEP) {
+            for (int x = 0; x < template.getWidth(); x += TEMPLATE_PIXEL_STEP) {
+                int templateRgb = template.getRGB(x, y);
+                if (isTransparent(templateRgb)) {
+                    continue;
+                }
 
-                totalDiff += colorDiff(rgb1, rgb2);
+                int screenRgb = screen.getRGB(startX + x, startY + y);
+
+                totalDiff += colorDiff(screenRgb, templateRgb);
                 count++;
 
-                if (totalDiff / (double) count > currentBest) {
+                if (count > 0 && totalDiff / (double) count > currentBest) {
                     return Double.MAX_VALUE;
                 }
             }
         }
 
+        if (count == 0) {
+            return Double.MAX_VALUE;
+        }
+
         return (double) totalDiff / count;
+    }
+
+    private boolean isTransparent(int argb) {
+        return ((argb >>> 24) & 0xff) < MIN_ALPHA;
     }
 
     private int colorDiff(int c1, int c2) {
